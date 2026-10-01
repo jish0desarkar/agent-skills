@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge Sync"
+  short_description: "Keep agent docs true to the default branch and local work"
+  default_prompt: "Use $knowledge-sync to refresh the repository knowledge files and promote merged local notes."

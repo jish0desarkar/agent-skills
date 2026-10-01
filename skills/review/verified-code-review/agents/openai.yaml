@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verified Code Review"
+  short_description: "Review diffs for verified, actionable defects"
+  default_prompt: "Use $verified-code-review to review this PR or change without implementing fixes."

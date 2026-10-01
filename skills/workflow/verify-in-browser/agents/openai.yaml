@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify In Browser"
+  short_description: "Prove a web change works in the running app"
+  default_prompt: "Use $verify-in-browser to verify this change in an isolated instance of the app."

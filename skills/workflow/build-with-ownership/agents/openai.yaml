@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build With Ownership"
+  short_description: "Ship features with AI while you keep the design"
+  default_prompt: "Use $build-with-ownership to implement this change with contract, design and verification gates."

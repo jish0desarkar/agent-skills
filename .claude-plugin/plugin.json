@@ -1,0 +1,22 @@
+{
+  "name": "jishnu-skills",
+  "version": "0.1.0",
+  "description": "Agent skills for shipping production code with AI without losing ownership: design gates, complexity budgets, state discipline, evidence-based review and self-maintaining codebase knowledge.",
+  "author": {
+    "name": "Jishnu De Sarkar",
+    "url": "https://github.com/jish0desarkar"
+  },
+  "repository": "https://github.com/jish0desarkar/agent-skills",
+  "license": "MIT",
+  "keywords": ["engineering", "code-review", "complexity", "architecture", "python", "codex", "claude-code"],
+  "skills": [
+    "./skills/workflow/build-with-ownership",
+    "./skills/workflow/verify-in-browser",
+    "./skills/code-quality/avoid-and-separate",
+    "./skills/code-quality/complexity-check",
+    "./skills/code-quality/design-system",
+    "./skills/review/verified-code-review",
+    "./skills/codebase-knowledge/progressive-search",
+    "./skills/codebase-knowledge/knowledge-sync"
+  ]
+}

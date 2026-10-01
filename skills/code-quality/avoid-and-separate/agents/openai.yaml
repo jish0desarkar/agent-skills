@@ -1,0 +1,4 @@
+interface:
+  display_name: "Avoid and Separate"
+  short_description: "Keep backend state and layering simple"
+  default_prompt: "Use $avoid-and-separate to review this backend change for accidental complexity."

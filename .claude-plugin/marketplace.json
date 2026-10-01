@@ -1,0 +1,16 @@
+{
+  "name": "jish0desarkar",
+  "owner": {
+    "name": "Jishnu De Sarkar",
+    "url": "https://github.com/jish0desarkar"
+  },
+  "description": "Jishnu's agent skills for real engineering, as an installable Claude Code plugin.",
+  "plugins": [
+    {
+      "name": "jishnu-skills",
+      "source": "./",
+      "description": "Ownership-preserving feature workflow, complexity budgets, Out-of-the-Tar-Pit state rules, evidence-based code review and codebase knowledge maps.",
+      "category": "engineering"
+    }
+  ]
+}

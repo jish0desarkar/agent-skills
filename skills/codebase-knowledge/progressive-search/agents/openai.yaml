@@ -1,0 +1,4 @@
+interface:
+  display_name: "Progressive Search"
+  short_description: "Find existing owners before writing new code"
+  default_prompt: "Use $progressive-search to find the existing owner for this change before adding an abstraction."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Complexity Check"
+  short_description: "Keep changed functions under cyclomatic and cognitive limits"
+  default_prompt: "Use $complexity-check to check the functions changed in this session."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design System"
+  short_description: "Enforce the repo UI primitives and tokens"
+  default_prompt: "Use $design-system to review this frontend change for compliance with the UI contract."
