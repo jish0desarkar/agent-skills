@@ -1,0 +1,59 @@
+{
+ "skill": {
+  "known": [],
+  "other": [
+   {
+    "summary": "Docs/release-notes box unchecked; a release note may be needed if the change form actions feature has shipped",
+    "severity": "optional",
+    "verdict": "NOISE",
+    "reason": "Docs/process remark. docs/releases/6.1.txt is still 'UNDER DEVELOPMENT', so the feature hasn't shipped and no note is required."
+   },
+   {
+    "summary": "Actions calling queryset.update() now run against whatever get_queryset() returns",
+    "severity": "optional (review says not a problem)",
+    "verdict": "NOISE",
+    "reason": "Intended behaviour. response_action forces select_across=False for CHANGE_FORM and filters pk__in=selected (options.py:1883), and the view requires exactly one selected pk equal to obj.pk, so only the one object is touched."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [],
+  "other": [
+   {
+    "summary": "actions.txt doesn't document which queryset change form actions receive; suggests adding a sentence (release note probably unnecessary)",
+    "severity": "minor, non-blocking",
+    "verdict": "NOISE",
+    "reason": "Confirmed that docs/ref/contrib/admin/actions.txt has no such sentence, but it's a docs suggestion. 6.1 is unreleased, so the release-note reasoning is right."
+   },
+   {
+    "summary": "Admins with a narrower get_queryset() now give actions an empty queryset for rows they hide",
+    "severity": "none (review says intended)",
+    "verdict": "NOISE",
+    "reason": "Not reachable as a defect: get_object uses get_queryset (options.py:957), so a hidden object returns None and the view redirects before any action runs."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [],
+  "other": [
+   {
+    "summary": "Making deleted=False the default manager changes what other code sees",
+    "severity": "minor, non-blocking",
+    "verdict": "NOISE",
+    "reason": "Test-fixture change only. git grep at head finds FilteredManager used only in admin registration, CustomManagerAdmin, the history test and the new test, and the review itself concludes it's fine."
+   },
+   {
+    "summary": "May need a release-notes or docs mention",
+    "severity": "minor, non-blocking",
+    "verdict": "NOISE",
+    "reason": "Docs/process speculation. The feature is in unreleased 6.1 (release notes still 'UNDER DEVELOPMENT')."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

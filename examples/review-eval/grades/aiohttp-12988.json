@@ -1,0 +1,71 @@
+{
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"On the ping header, the check at :408 is true because _compressed is NOT_SET. So _compressed becomes COMPRESSED_FALSE. The new if opcode <= 0x7 guard skips the ping, so _frame_fin stays False... On the compressed data frame... the elif rsv1 branch raises PROTOCOL_ERROR\"; fix: \"Don't let control frames latch _compressed\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Test only covers a mid-message ping, not a control frame first; docs box unticked",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "Test and checklist note, not a code defect. The test-gap part is accurate: the PR's test feeds fragment, ping, continuation."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"The ping reaches the latch at line 408 and sets _compressed = COMPRESSED_FALSE... line 420 is skipped for the ping, so _frame_fin stays False... The first compressed TEXT or BINARY frame then... falls into elif rsv1: and raises WebSocketError(PROTOCOL_ERROR...)\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "_handle_frame receives the stale self._frame_fin for interleaved control frames; visible in the 'Invalid close frame: {fin}' error text",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "Confirmed: :515-516 passes self._frame_fin, which control frames no longer update after the PR. fin is used only in the close-frame error f-string at :316, reachable with a 1-byte close payload. Introduced by the PR, cosmetic only."
+   },
+   {
+    "summary": "New test never covers the ping-first sequence",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Test-coverage note. Accurate, but not a separate defect."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"The compression-state block just above it still runs for every frame, including control frames... _compressed becomes COMPRESSED_FALSE... After the PR it stays False... The first compressed text or binary frame (rsv1=1)... hits elif rsv1 and raises PROTOCOL_ERROR\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Close-frame error text shows a stale fin because _handle_frame gets self._frame_fin",
+    "severity": "Minor",
+    "verdict": "VALID",
+    "reason": "Same check as Y: the stale value reaches only the f-string at :316. A real behavior change introduced by the PR, cosmetic only."
+   },
+   {
+    "summary": "Changelog entry is vague",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "Wording suggestion for CHANGES/12988.bugfix.rst."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

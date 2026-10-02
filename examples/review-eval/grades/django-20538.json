@@ -1,0 +1,116 @@
+{
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of choices fields / TypedChoiceField returning unvalidated strings or a resulting ValueError/500."
+   },
+   {
+    "id": "K2",
+    "verdict": "CAUGHT",
+    "evidence": "\"forms.BooleanField.to_python only maps false and 0 to False and runs bool(value) on everything else. It never raises ValidationError. So foo becomes True, and the search returns every row where flag=True.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Nullable BooleanField uses forms.NullBooleanField, which maps unknown strings to None, so the lookup becomes IS NULL and returns all NULL rows",
+    "severity": "Medium (part of boolean finding)",
+    "verdict": "VALID",
+    "reason": "Model BooleanField.formfield uses forms.NullBooleanField when null=True (fields/__init__.py:1196); its to_python returns None for unrecognised values; Q(x__exact=None) becomes isnull."
+   },
+   {
+    "summary": "Empty quoted search term \"\" makes Integer/Decimal/Date/FK form fields return None, giving an __exact=None (IS NULL) match",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "unescape_string_literal('\"\"') gives ''; these form fields' to_python return None for empty values without raising; the base Cast compared to '' and matched nothing."
+   },
+   {
+    "summary": "FK/O2O __exact search validates through ModelChoiceField.to_python, adding a DB query per term and passing a model instance",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "construct_search returns the FK as prev_field; ForeignKey.formfield returns ModelChoiceField whose to_python does queryset.get()."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of choices fields or TypedChoiceField."
+   },
+   {
+    "id": "K2",
+    "verdict": "CAUGHT",
+    "evidence": "\"forms.BooleanField.to_python treats everything except \"false\" and \"0\" as True. A search for foo on a BooleanField therefore becomes bool=True, and all True rows are returned.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Quoted empty term becomes field__exact=None (IS NULL) for integer/decimal/date/UUID fields",
+    "severity": "should fix before merge",
+    "verdict": "VALID",
+    "reason": "Form fields return None for '' without raising; Q(exact=None) becomes isnull; base Cast matched nothing."
+   },
+   {
+    "summary": "fk__exact runs a ModelChoiceField query per term and skips the lookup if the row isn't in the default-manager queryset",
+    "severity": "Lower",
+    "verdict": "VALID",
+    "reason": "ForeignKey.formfield uses ModelChoiceField over _default_manager and to_python queries. The claim that limit_choices_to is respected is inaccurate, since formfield() alone doesn't apply it, but the core finding holds."
+   },
+   {
+    "summary": "formfield() rebuilt for every term and lookup",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "True (formfield() is called inside the per-bit loop), but it is a minor efficiency nit."
+   },
+   {
+    "summary": "Narrow test coverage and missing release note",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "Test and docs suggestions, not code defects."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of choices fields or TypedChoiceField."
+   },
+   {
+    "id": "K2",
+    "verdict": "CAUGHT",
+    "evidence": "\"forms.BooleanField.to_python (django/forms/fields.py:816-826) never raises. Anything other than false or 0 goes through bool(value), so foo becomes True. The query becomes flag = True.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Nullable BooleanField: NullBooleanField.to_python returns None for unknown strings, so the lookup becomes IS NULL",
+    "severity": "Medium (part of boolean finding)",
+    "verdict": "VALID",
+    "reason": "Verified the null=True form_class selection and the NullBooleanField.to_python else-branch returning None."
+   },
+   {
+    "summary": "FK/OneToOne __exact search hits the DB per term through ModelChoiceField.to_python and passes a model instance",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "prev_field is the relation; ForeignKey.formfield gives ModelChoiceField, whose to_python calls queryset.get()."
+   },
+   {
+    "summary": "Date/DateTime exact matching now depends on form input formats (explicitly not traced)",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Speculative and explicitly untraced; no concrete defect stated."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

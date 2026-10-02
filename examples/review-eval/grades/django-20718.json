@@ -1,0 +1,107 @@
+{
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "Item 1: \"list_display = [\"parent__parent\"] ... items_for_result takes the ManyToOneRel branch and calls getattr(result, f.name) ... raises AttributeError or reads the wrong attribute\"; Item 2: \"The new get_fields_from_path(opts.model, name) call is unguarded. It raises on any such name [properties/methods]. items_for_result only catches ObjectDoesNotExist.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "get_fields_from_path starts from opts.model, which may be wrong for deferred/proxy instances",
+    "severity": "blocker-adjacent (listed as problem 3)",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "Deferred model classes no longer exist; a proxy's _meta has the same fields, so traversal from obj._meta.model resolves identically."
+   },
+   {
+    "summary": "Path is traversed twice (getattr walk then get_fields_from_path)",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Minor efficiency point; not a defect."
+   },
+   {
+    "summary": "All related lookups now go through display_for_field instead of display_for_value (choices, File/JSON fields, decimals change output)",
+    "severity": "none (problem 4)",
+    "verdict": "VALID",
+    "reason": "f is set for every __ path; items_for_result then calls display_for_field for non-FK finals, which renders choice labels, file links and the like differently."
+   },
+   {
+    "summary": "Related columns lose attr.empty_value_display and short_description handling",
+    "severity": "none (problem 4)",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "The PR doesn't change attr (still the traversed value), so empty_value_display lookup is unchanged; short_description is handled in label_for_field, which the PR doesn't touch."
+   },
+   {
+    "summary": "readonly_fields = ['parent__x'] now gets non-None f in AdminReadonlyField.contents",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Admin check E035 rejects __ paths in readonly_fields (hasattr/get_field fail); reachable only via dynamic get_readonly_fields, and the review only says it's untested/undiscussed."
+   },
+   {
+    "summary": "Missing tests (non-boolean related field, FK final, None parent, readonly) and weak assertNotContains",
+    "severity": "smaller",
+    "verdict": "NOISE",
+    "reason": "Test nit."
+   },
+   {
+    "summary": "Docs/release note missing; model field addition may affect other tests; control flow style",
+    "severity": "smaller",
+    "verdict": "NOISE",
+    "reason": "Docs/style nits."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"Example: GrandChildAdmin.list_display = [\"parent__parent\"] ... f is Child.parent, and getattr(grandchild, \"parent\") happens to resolve (wrong object). With [\"parent__other_fk\"] ... it raises AttributeError, and the changelist returns a 500.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Every non-boolean related column now formatted by display_for_field (choices labels, nowrap, etc.), unannounced behavior change",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "f is now non-None for all __ paths, so items_for_result uses display_for_field; choice/decimal/file rendering differs from display_for_value."
+   },
+   {
+    "summary": "get_fields_from_path re-resolves per row/column; docs and release notes not updated",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "Performance/docs nit, not a defect."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"list_display = [\"parent__other_fk\"] ... runs getattr(result, f.name) ... raises AttributeError\" and \"a list_display ... entry such as parent__some_property ... get_fields_from_path calls _meta.get_field(), which doesn't know properties ... raises FieldDoesNotExist ... Changelist: 500 error.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Every related lookup goes through display_for_field (choices, dates, decimals, nowrap); readonly path treats relation endpoints specially, e.g. parent__children",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "Core claim true: f is set for all __ paths, so display_for_field changes output. The parent__children example is wrong (auto_created \u2192 display_for_value in changelist; E109/E035 reject it) and readonly __ paths are rejected by checks, but the main issue holds."
+   },
+   {
+    "summary": "Test gaps (FK-final, non-field attr, None parent, readonly), weak assertNotContains, missing docs/release note",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "Test/docs nits."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

@@ -79,6 +79,11 @@ Some prompts that work well:
 - *"Verify this in the browser"* before you call a UI change done.
 - *"Set up the repository maps"* once per repo, then *"run knowledge sync"* now and then to keep them current.
 
+## Examples
+
+- [Eval: verified-code-review on 10 real pull requests](./examples/review-eval/README.md). Blind reviews of 10 merged aiohttp, FastAPI and Django PRs (8 later needed fixes), with and without the skill, graded against the maintainers' fixes. The skill found the same bugs as stock Claude Code, with less noise, and never touched the checkout; stock changed it in 7 of 10 runs. Every review, grade and script is included.
+- [Reviewing a PR that shipped a regression](./examples/aiohttp-12988/README.md). A one-line aiohttp change passed review and shipped in 3.14.2 with a WebSocket bug. Two blind Claude Code sessions, with and without `verified-code-review`, both found it. The page shows both reviews, how they were scored against the maintainers' fix, and what the skill changed.
+
 ## The skills
 
 ### Workflow
@@ -156,6 +161,7 @@ skills/
   code-quality/        avoid-and-separate, complexity-check, design-system
   review/              verified-code-review
   codebase-knowledge/  progressive-search, knowledge-sync
+examples/              real runs of the skills, with their full output
 .claude-plugin/        Claude Code plugin and marketplace manifests
 ```
 

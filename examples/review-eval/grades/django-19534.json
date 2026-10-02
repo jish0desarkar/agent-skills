@@ -1,0 +1,45 @@
+{
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"The check `\"..\" in str(filter_expression.var)` also matches quoted literals. For a constant like `{{ \"a..b\" }}`, `FilterExpression` stores the already-resolved string as `var`, so the deprecation warning fires even though no lookup happens\"; fix: warn only when `var` is a `Variable` whose `lookups` contains an empty string."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Tests only cover `{{ doubledot..lookup }}`: no negative test for literals, and double-dot in tags ({% if a..b %}, {% for %}) is neither covered nor documented in the release note",
+    "severity": "test-coverage",
+    "verdict": "NOISE",
+    "reason": "True that the warning is only in the VAR-token branch (base.py:558) and tags go through compile_filter without it. But the missing negative test restates K1, and tag scope is a deliberate limit that won't break anything when the deprecation ends (the error is also raised only in the VAR branch). This is a test/docs nit."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"The deprecation warning also fires for string literals and translated strings that contain `..`\"; \"`FilterExpression.__init__` resolves quoted constants at parse time (`Variable(constant).resolve({})`), so `filter_expression.var` is the plain string\"; mentions the -W error impact and the TemplateSyntaxError once the deprecation ends; fix: `is_var` plus `\"\" in var.lookups`. (Minor misstatement: claims `_(\"...\")` stays a Variable, but it is resolved to a lazy translated string; the conclusion still holds.)"
+   }
+  ],
+  "other": [],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"When the expression starts with a quoted constant, `FilterExpression.__init__` stores the resolved string in `.var`, not a `Variable` (`base.py:770-773`, `self.var = var_obj` at line 799). So `{{ \"Loading...\" }}`, `{{ \"wait..\"|upper }}` and `{{ _(\"Please wait...\") }}` all contain `..` and match\"; mentions breakage once the deprecation ends; fix: check `filter_expression.is_var` or an empty entry in `.lookups`."
+   }
+  ],
+  "other": [],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

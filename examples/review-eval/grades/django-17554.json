@@ -1,0 +1,110 @@
+{
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of from_db() overrides or the new fetch_mode kwarg passed by ModelIterable/RawModelIterable/RelatedPopulator."
+   },
+   {
+    "id": "K2",
+    "verdict": "MISSED",
+    "evidence": "No mention of router instance hints being dropped for custom Prefetch querysets in get_prefetch_querysets()."
+   }
+  ],
+  "other": [
+   {
+    "summary": "DeferredAttribute.fetch_many uses values_list(attname).in_bulk(pks), so FETCH_PEERS stores 1-tuples like ('x',) instead of the field value",
+    "severity": "High",
+    "verdict": "VALID",
+    "reason": "in_bulk's ValuesListIterable branch adds pk and applies itemgetter(slice(1, None)). Reproduced at the PR head: p1.value == ('va',). Tests only count queries."
+   },
+   {
+    "summary": "fetch_many does setattr on every peer, overwriting already-loaded or edited values, and raises KeyError when a peer row has been deleted",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "No __dict__/is_cached filter, unlike the FK/O2O/GFK fetch_many methods. Reproduced: p2's unsaved edit was overwritten, and a deleted peer gave KeyError: 2."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of from_db() signature or fetch_mode kwarg."
+   },
+   {
+    "id": "K2",
+    "verdict": "MISSED",
+    "evidence": "No mention of database router hints or custom Prefetch querysets."
+   }
+  ],
+  "other": [
+   {
+    "summary": "ForwardManyToOneDescriptor.__get__ returns the cached value right after fetch, so a dangling non-null FK returns None under FETCH_PEERS instead of raising",
+    "severity": "PLAUSIBLE (correctness)",
+    "verdict": "VALID",
+    "reason": "__get__ returns get_cached_value() after fetch, skipping the null check, and prefetch caches None. Reproduced: p2.t is None with FETCH_PEERS, while FETCH_ONE raises DoesNotExist."
+   },
+   {
+    "summary": "DeferredAttribute.fetch_many overwrites loaded or edited peer values and raises KeyError for deleted peers",
+    "severity": "PLAUSIBLE (correctness)",
+    "verdict": "VALID",
+    "reason": "Unconditional setattr with value_by_pk[instance.pk]. Reproduced both the overwrite and KeyError: 2."
+   },
+   {
+    "summary": "GenericForeignKeyDescriptor.__get__ calls fetch_mode.fetch even when content_type is None, so RAISE raises FieldFetchBlocked where no query is needed",
+    "severity": "PLAUSIBLE (correctness)",
+    "verdict": "VALID",
+    "reason": "The base code guarded with 'if ct_id is not None'. The head calls fetch unconditionally. Reproduced FieldFetchBlocked for a GFK with ct=None under RAISE."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Lists 'from_db' among the traced changes but reports no problem with overridden from_db() signatures."
+   },
+   {
+    "id": "K2",
+    "verdict": "MISSED",
+    "evidence": "No mention of router instance hints for custom Prefetch querysets."
+   }
+  ],
+  "other": [
+   {
+    "summary": "FETCH_PEERS deferred fetch stores 1-tuples instead of the value because of values_list(attname).in_bulk()",
+    "severity": "High",
+    "verdict": "VALID",
+    "reason": "Confirmed in the in_bulk source and by running it: values are ('va',). The suggested flat=True fix takes the FlatValuesListIterable branch and returns scalars."
+   },
+   {
+    "summary": "DeferredAttribute.fetch_many overwrites peers' loaded or edited values and raises KeyError on deleted peers",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "No is_cached/__dict__ filter, unlike the relational fetch_many methods. Reproduced both cases."
+   },
+   {
+    "summary": "A dangling FK on a non-null relation returns None under FETCH_PEERS instead of raising",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "Early return of get_cached_value() after fetch skips the null check. Reproduced: None with peers, DoesNotExist with a single fetch."
+   },
+   {
+    "summary": "GFK get_prefetch_querysets overrides a user-supplied custom queryset's fetch_mode",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "True in the code (queryset.fetch_mode(instances[0]._state.fetch_mode) is applied to custom querysets), but commit b45d4a5 deliberately copies fetch modes to related objects. This is a design choice with only speculative harm."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

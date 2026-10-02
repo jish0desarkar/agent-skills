@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Offline stand-in for the GitHub CLI, serving one frozen pull request.
+
+The PR is described by the JSON file in $GH_STUB_DATA. Diffs are read from the local
+mirror that serves as the checkout's `origin`.
+"""
+import json
+import os
+import subprocess
+import sys
+
+META = json.load(open(os.environ["GH_STUB_DATA"]))
+N = str(META["number"])
+OWNER_REPO = META["repo"]
+
+
+def die(msg, code=1):
+    print(msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def run_jq(data, expr):
+    out = subprocess.run(["jq", "-r", expr], input=json.dumps(data), capture_output=True, text=True)
+    if out.returncode:
+        die(out.stderr.strip() or "jq failed")
+    sys.stdout.write(out.stdout)
+
+
+def emit(data, jq=None):
+    if jq:
+        run_jq(data, jq)
+    else:
+        print(json.dumps(data, indent=2))
+
+
+def opt(args, *names, flag=False):
+    """Pop an option (and its value) from args."""
+    for i, a in enumerate(args):
+        for name in names:
+            if a == name:
+                if flag:
+                    del args[i]
+                    return True
+                val = args[i + 1] if i + 1 < len(args) else None
+                del args[i : i + 2]
+                return val
+            if not flag and a.startswith(name + "="):
+                del args[i]
+                return a.split("=", 1)[1]
+    return False if flag else None
+
+
+def check_pr(args):
+    target = next((a for a in args if not a.startswith("-")), N)
+    target = target.rstrip("/").split("/")[-1].lstrip("#")
+    if target not in (N, META["headRefName"]):
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {target}. (repository.pullRequest)")
+
+
+def git_out(*cmd):
+    # Read from the mirror so the stub never adds refs or objects to the user's checkout.
+    return subprocess.run(["git", "--git-dir", META["origin"], *cmd], capture_output=True, text=True).stdout
+
+
+def pr_json():
+    files = META["files"]
+    return {
+        "number": int(N),
+        "title": META["title"],
+        "body": META["body"],
+        "state": "OPEN",
+        "isDraft": False,
+        "url": META["url"],
+        "author": {"login": META["author"]},
+        "createdAt": META["createdAt"],
+        "baseRefName": META["baseRefName"],
+        "baseRefOid": META["baseRefOid"],
+        "headRefName": META["headRefName"],
+        "headRefOid": META["headRefOid"],
+        "headRepositoryOwner": {"login": META["author"]},
+        "isCrossRepository": True,
+        "additions": META["additions"],
+        "deletions": META["deletions"],
+        "changedFiles": len(files),
+        "files": [{"path": f["path"], "additions": f["additions"], "deletions": f["deletions"]} for f in files],
+        "commits": META["commits"],
+        "comments": [],
+        "reviews": [],
+        "reviewRequests": [],
+        "reviewDecision": "",
+        "latestReviews": [],
+        "labels": [],
+        "assignees": [],
+        "milestone": None,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+        "statusCheckRollup": [],
+        "closingIssuesReferences": [],
+    }
+
+
+def pr_view(args):
+    fields = opt(args, "--json")
+    jq = opt(args, "--jq", "-q")
+    opt(args, "--repo", "-R")
+    comments = opt(args, "--comments", "-c", flag=True)
+    opt(args, "--web", "-w", flag=True)
+    check_pr(args)
+    data = pr_json()
+    if fields:
+        emit({k: data.get(k) for k in fields.split(",")}, jq)
+        return
+    print(f"{META['title']} #{N}")
+    print(f"Open • {META['author']} wants to merge {len(META['commits'])} commit(s) into {META['baseRefName']} from {META['headRefName']} • +{META['additions']} -{META['deletions']}")
+    print()
+    print(META["body"] or "No description provided")
+    print()
+    if comments:
+        print("No comments on this pull request.")
+    print(f"View this pull request on GitHub: {META['url']}")
+
+
+def pr_diff(args):
+    opt(args, "--repo", "-R")
+    opt(args, "--color")
+    name_only = opt(args, "--name-only", flag=True)
+    opt(args, "--patch", flag=True)
+    check_pr(args)
+    rng = f"{META['baseRefOid']}...{META['headRefOid']}"
+    sys.stdout.write(git_out("diff", "--name-only", rng) if name_only else git_out("diff", rng))
+
+
+def pr_checkout(args):
+    opt(args, "--repo", "-R")
+    branch = opt(args, "--branch", "-b") or META["headRefName"]
+    force = opt(args, "--force", "-f", flag=True)
+    check_pr(args)
+    r = subprocess.run(["git", "fetch", "-q", "origin", f"pull/{N}/head:{branch}"] + (["--force"] if force else []), capture_output=True, text=True)
+    if r.returncode:
+        die(r.stderr.strip())
+    r = subprocess.run(["git", "checkout", branch], capture_output=True, text=True)
+    sys.stderr.write(r.stderr)
+    sys.exit(r.returncode)
+
+
+def api(args):
+    jq = opt(args, "--jq", "-q")
+    opt(args, "--paginate", flag=True)
+    opt(args, "--method", "-X")
+    path = next((a for a in args if not a.startswith("-")), "")
+    path = path.lstrip("/").split("?")[0]
+    prefix = f"repos/{OWNER_REPO}/"
+    if not path.startswith(prefix):
+        die(f"gh: Not Found (HTTP 404)")
+    rest = path[len(prefix):].split("/")
+    data = pr_json()
+    if rest[:2] == ["pulls", N] and len(rest) == 2:
+        out = {
+            "number": int(N), "title": META["title"], "body": META["body"], "state": "open",
+            "html_url": META["url"], "user": {"login": META["author"]}, "created_at": META["createdAt"],
+            "base": {"ref": META["baseRefName"], "sha": META["baseRefOid"]},
+            "head": {"ref": META["headRefName"], "sha": META["headRefOid"]},
+            "additions": META["additions"], "deletions": META["deletions"], "changed_files": len(META["files"]),
+            "merged": False, "draft": False,
+        }
+    elif rest[:2] == ["pulls", N] and rest[2:] == ["files"]:
+        out = [{"filename": f["path"], "additions": f["additions"], "deletions": f["deletions"], "status": f["status"]} for f in META["files"]]
+    elif rest[:2] == ["pulls", N] and rest[2:] == ["commits"]:
+        out = [{"sha": c["oid"], "commit": {"message": c["messageHeadline"]}} for c in META["commits"]]
+    elif rest[:2] in (["pulls", N], ["issues", N]) and rest[2:] in (["comments"], ["reviews"]):
+        out = []
+    elif rest[:2] == ["issues", N] and len(rest) == 2:
+        out = {"number": int(N), "title": META["title"], "body": META["body"], "state": "open", "pull_request": {"url": META["url"]}}
+    elif rest[0] == "commits" and len(rest) >= 3 and rest[2] in ("check-runs", "status", "statuses"):
+        out = {"total_count": 0, "check_runs": []} if rest[2] == "check-runs" else {"state": "pending", "statuses": []}
+    else:
+        die("gh: Not Found (HTTP 404)")
+    emit(out, jq)
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        die("usage: gh <command> <subcommand> [flags]  (offline mirror)")
+    cmd, sub, rest = args[0], (args[1] if len(args) > 1 else ""), args[2:]
+    if cmd == "pr" and sub == "view":
+        pr_view(rest)
+    elif cmd == "pr" and sub == "diff":
+        pr_diff(rest)
+    elif cmd == "pr" and sub == "checkout":
+        pr_checkout(rest)
+    elif cmd == "pr" and sub == "checks":
+        print(f"no checks reported on the '{META['headRefName']}' branch")
+    elif cmd == "pr" and sub == "list":
+        print(f"{N}\t{META['title']}\t{META['headRefName']}\tOPEN")
+    elif cmd == "pr" and sub in ("status",):
+        print(f"Current branch\n  There is no pull request associated with the current branch\n\nCreated by you\n  You have no open pull requests")
+    elif cmd == "api":
+        api(args[1:])
+    elif cmd == "repo" and sub == "view":
+        print(f"name:\t{OWNER_REPO}")
+    elif cmd == "auth" and sub == "status":
+        print("github.com\n  ✓ Logged in to github.com (offline mirror)")
+    elif cmd in ("--version", "version"):
+        print("gh version 2.83.0 (offline mirror)")
+    else:
+        die(f"gh {cmd} {sub}: not available in this offline environment")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,95 @@
+{
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Discusses get_prep_lookup only in terms of plain values being wrapped as Value(v, lhs.output_field) instead of only str; never mentions that self.rhs is iterated twice or that a generator gets used up."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Related-field __in lists mixing an expression with model instances or pks could fail because ForeignKey.get_db_prep_value may not accept a model instance",
+    "severity": "none (risk)",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "RelatedIn.get_prep_lookup turns model instances into pks (get_normalized_value) before calling super(), and Value.as_sql runs get_db_prep_value, which calls get_prep_value, so behaviour is equivalent."
+   },
+   {
+    "summary": "JSONIn.process_lhs wraps a top-level LHS in JSON_EXTRACT/CASE/COALESCE even when the RHS is a subquery or column, changing comparison semantics for json_field__in=Model.objects.values('json_field')",
+    "severity": "none (risk)",
+    "verdict": "VALID",
+    "reason": "process_lhs wraps every non-KeyTransform LHS while a Query RHS stays raw; in sqlite3, CASE/JSON_EXTRACT(v) IN (select v ...) fails for objects, arrays and strings that matched with the old raw comparison."
+   },
+   {
+    "summary": "_process_as_oracle returns params * 2 instead of tuple(params) * 2",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Self-described as harmless; only the container type changes."
+   },
+   {
+    "summary": "JSONNull detection in as_oracle relies on Value equality and a bare None becomes Value(None, JSONField)",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Expression equality is based on constructor arguments, so JSONNull() matches correctly; the None part is a request to confirm intent, not a demonstrated defect."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Explicitly says of the get_prep_lookup change: 'I found no regression from this.' Never mentions the double iteration of self.rhs."
+   }
+  ],
+  "other": [
+   {
+    "summary": "JSONIn.as_oracle returns '(a) OR (b)' without outer parentheses, so in an AND WhereNode it becomes '(a) OR (b) AND other = 1' and returns wrong rows",
+    "severity": "High",
+    "verdict": "VALID",
+    "reason": "as_oracle returns ' OR '.join(sql_parts) unwrapped; WhereNode.as_sql joins children with ' AND ' and only wraps the whole node when negated or it has more than one child."
+   },
+   {
+    "summary": "Value(JSONNull(), JSONField()) in the list isn't detected by the JSONNull() check in as_oracle",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "Contrived construction (JSONNull is already a Value), and the review itself marks it as an unrun edge case; no realistic use shown."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Its get_prep_lookup note is about reading self.lhs.output_field for non-string items, not about self.rhs being consumed by any() before the second iteration."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Oracle JSONIn.as_oracle OR expansion has no outer parentheses, so AND-combined filters return wrong rows",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "Confirmed in json.py as_oracle (unwrapped ' OR '.join) and where.py WhereNode.as_sql (children joined without per-child parentheses)."
+   },
+   {
+    "summary": "Top-level value__in with a subquery or column RHS wraps only the LHS (JSON_EXTRACT/CASE), so SQLite/MySQL comparisons stop matching",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "process_lhs wraps every non-KeyTransform LHS; a Query RHS bypasses resolve_expression_parameter; sqlite3 check shows objects, arrays and strings no longer match while they did with the raw comparison."
+   },
+   {
+    "summary": "get_prep_lookup now reads lhs.output_field for non-string items and could raise FieldError when it can't be resolved",
+    "severity": "Low",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "The old code already evaluated hasattr(self.lhs, 'output_field'), which doesn't swallow FieldError, and build_lookup must resolve lhs.output_field to find the lookup at all, so the case is unreachable."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

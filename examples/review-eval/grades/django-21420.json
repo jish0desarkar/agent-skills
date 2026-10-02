@@ -1,0 +1,89 @@
+{
+ "skill-maps": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "PARTIAL",
+    "evidence": "\"Now `_is_pk_set()` returns False, so `_save_table` calls `meta.pk.get_pk_value_on_save(self)`\" \u2014 right mechanism, but the stated concrete effect (pk overwritten with None, inserted as NULL) is false; the real Python-default-over-db_default effect is not identified."
+   }
+  ],
+  "other": [
+   {
+    "summary": "save() on a db_default-only pk sets the pk to None and inserts NULL",
+    "severity": "High",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "get_pk_value_on_save checks `if self.default:`, which is always true because NOT_PROVIDED is a class; get_default() then returns a fresh DatabaseDefault. When run on SQLite at the head, the INSERT used VALUES (1) / ('abc'), the same as at the base."
+   },
+   {
+    "summary": "Helper `_is_set` returns True for unset values (inverted name)",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "True per diff, but naming only."
+   },
+   {
+    "summary": "Inline formset test only asserts is_valid() is False",
+    "severity": "Low",
+    "verdict": "NOISE",
+    "reason": "Test-strength nit; the test does fail at the base (crash), so it has some value."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "PARTIAL",
+    "evidence": "\"`_save_table` then calls `meta.pk.get_pk_value_on_save(self)`\" (with a false NULL consequence), plus the Medium finding \"Other `_is_pk_set()` callers change behavior ... treat an instance whose pk is a `DatabaseDefault` as having no pk\" with accurate call sites but no concrete changed behavior."
+   }
+  ],
+  "other": [
+   {
+    "summary": "save() on a db_default-only pk inserts NULL and breaks the PrimaryKeyWithDbDefault save tests",
+    "severity": "High",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "Field.get_pk_value_on_save returns get_default() (a DatabaseDefault) because NOT_PROVIDED is truthy; a SQLite run at the head inserted the db default normally."
+   },
+   {
+    "summary": "New inline test uses the wrong prefix and passes without the fix",
+    "severity": "Low",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "The prefix mismatch is real, but at the base, constructing the formset with that data raises ValidationError '<DatabaseDefault> is not a valid UUID', so the test would fail without the fix."
+   },
+   {
+    "summary": "Inner helper `_is_set` name is inverted",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Naming only."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "\"found no correctness bugs\"; \"the logic is correct\"."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Nested helper `_is_set` name is inverted",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "True per diff; style only."
+   },
+   {
+    "summary": "test_add_form_uuid_pk is weak/misnamed (INITIAL_FORMS=1, only asserts invalid)",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "Test nit; line 127 is the assert in the added test."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

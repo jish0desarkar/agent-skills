@@ -1,0 +1,65 @@
+{
+ "baseline": {
+  "known": [],
+  "other": [
+   {
+    "summary": "Non-GET/HEAD requests now do filesystem lookups, so PermissionError gives 401 and other OSErrors give 500 instead of the old unconditional 405",
+    "severity": "low (PLAUSIBLE, 'may be acceptable')",
+    "verdict": "VALID",
+    "reason": "The diff makes the non-GET branch call _lookup_static_resource \u2192 _lookup_path, which maps PermissionError to 401 and re-raises other OSErrors. Starlette's lookup_path only catches FileNotFoundError and NotADirectoryError, so e.g. ELOOP gives a 500. Before the PR, 405 was raised without touching the filesystem. Real and reachable, but very low impact and consistent with GET. The line number 1843 is right."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-maps": {
+  "known": [],
+  "other": [
+   {
+    "summary": "Non-GET request to a path raising PermissionError now returns 401 instead of 405",
+    "severity": "none (minor observation)",
+    "verdict": "VALID",
+    "reason": "Confirmed in the diff: _lookup_path maps PermissionError to 401 and the non-GET branch now calls it. Edge case that matches GET behaviour, as the review says."
+   },
+   {
+    "summary": "_lookup_static_resource is called from two branches (readability)",
+    "severity": "none (readability)",
+    "verdict": "NOISE",
+    "reason": "Style point. The two calls are in mutually exclusive branches and there is no functional problem."
+   },
+   {
+    "summary": "PR description is the empty template with an unticked checklist and no linked discussion",
+    "severity": "none (process)",
+    "verdict": "NOISE",
+    "reason": "Process point, not about the code."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill": {
+  "known": [],
+  "other": [
+   {
+    "summary": "Non-GET request hitting an unreadable path now gets 401 where it used to get 405",
+    "severity": "none (minor, not blocking)",
+    "verdict": "VALID",
+    "reason": "Confirmed: the PermissionError \u2192 401 mapping in _lookup_path is now reached from the non-GET branch. Rare and consistent with GET."
+   },
+   {
+    "summary": "Non-GET 404 responses never use the 404.html fallback page",
+    "severity": "none (seems intended)",
+    "verdict": "NOISE",
+    "reason": "True: the non-GET branch raises 404 before the fallback code. But the updated frontend.md and the new tests show this is intended, so it isn't a defect."
+   },
+   {
+    "summary": "PR checklist unticked, description empty, discussion and coverage claims unverified",
+    "severity": "none (limits section)",
+    "verdict": "NOISE",
+    "reason": "Process point, not about the code."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}
