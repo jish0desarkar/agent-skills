@@ -1,35 +1,71 @@
 {
- "skill": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of choices fields / TypedChoiceField returning unvalidated strings or a resulting ValueError/500."
+    "evidence": "No mention of choices fields / TypedChoiceField returning raw strings or of a ValueError/500."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"forms.BooleanField.to_python only maps false and 0 to False and runs bool(value) on everything else. It never raises ValidationError. So foo becomes True, and the search returns every row where flag=True.\""
+    "evidence": "'Boolean fields now match arbitrary search terms ... forms.BooleanField ... to_python never raises ... the filter becomes flag__exact=True. A search for foo returns every row where flag is true.' Also correctly notes null=True -> NullBooleanField -> None -> IS NULL."
    }
   ],
   "other": [
    {
-    "summary": "Nullable BooleanField uses forms.NullBooleanField, which maps unknown strings to None, so the lookup becomes IS NULL and returns all NULL rows",
-    "severity": "Medium (part of boolean finding)",
+    "summary": "Related-field __exact lookups validate through ModelChoiceField.to_python, so each term costs a DB query and the lookup follows default-manager semantics",
+    "severity": "Medium",
     "verdict": "VALID",
-    "reason": "Model BooleanField.formfield uses forms.NullBooleanField when null=True (fields/__init__.py:1196); its to_python returns None for unrecognised values; Q(x__exact=None) becomes isnull."
+    "reason": "forms/models.py:1588 runs queryset.get() for each term; the FK formfield queryset uses _default_manager. Reachable with search_fields=['author__exact']. The limit_choices_to sub-claim is wrong: it is applied only by apply_limit_choices_to_to_formfield, which is not called here."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of choices fields or an unvalidated raw string reaching the ORM."
    },
    {
-    "summary": "Empty quoted search term \"\" makes Integer/Decimal/Date/FK form fields return None, giving an __exact=None (IS NULL) match",
-    "severity": "Low",
+    "id": "K2",
+    "verdict": "MISSED",
+    "evidence": "It treats the boolean leniency as intended ('so that, for example, \"false\" is accepted for a BooleanField') and never says junk terms become True."
+   }
+  ],
+  "other": [
+   {
+    "summary": "FK/O2O __exact lookups run a queryset.get() per term via ModelChoiceField; existing ids can be skipped",
+    "severity": "none (listed as one of two things needing attention)",
     "verdict": "VALID",
-    "reason": "unescape_string_literal('\"\"') gives ''; these form fields' to_python return None for empty values without raising; the base Cast compared to '' and matched nothing."
+    "reason": "Per-term query confirmed at forms/models.py:1588. The MTI parent-link sub-claim is false: OneToOneField.formfield() returns None for parent_link (related.py:1378), so it falls back to model to_python with no query. The limit_choices_to sub-claim is also false."
    },
    {
-    "summary": "FK/O2O __exact search validates through ModelChoiceField.to_python, adding a DB query per term and passing a model instance",
-    "severity": "Low",
+    "summary": "Form-field parsing is locale-dependent (e.g. DateField input formats), so search behaviour varies by language",
+    "severity": "minor / 'judgment call, not a bug'",
+    "verdict": "NOISE",
+    "reason": "The review itself frames it as a design preference, not a defect."
+   },
+   {
+    "summary": "Q(pk__in=[]) would be clearer as queryset.none(); a term invalid for every field yields no rows",
+    "severity": "smaller note",
+    "verdict": "NOISE",
+    "reason": "Style point. AND-of-terms returning nothing for an unmatched term matches the old behaviour."
+   },
+   {
+    "summary": "Empty quoted term \"\" becomes None, i.e. exact=None / IS NULL",
+    "severity": "smaller note",
     "verdict": "VALID",
-    "reason": "construct_search returns the FK as prev_field; ForeignKey.formfield returns ModelChoiceField whose to_python does queryset.get()."
+    "reason": "unescape_string_literal('\"\"') gives ''; forms.IntegerField.to_python('') returns None; exact=None compiles to IS NULL. Previously the cast comparison matched nothing."
+   },
+   {
+    "summary": "No release note or docs change",
+    "severity": "smaller note",
+    "verdict": "NOISE",
+    "reason": "Documentation nit."
    }
   ],
   "states_limits": true,
@@ -40,74 +76,74 @@
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of choices fields or TypedChoiceField."
+    "evidence": "No mention of choices fields / TypedChoiceField."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"forms.BooleanField.to_python treats everything except \"false\" and \"0\" as True. A search for foo on a BooleanField therefore becomes bool=True, and all True rows are returned.\""
+    "evidence": "'bool__exact matches every True row for any search term. forms.BooleanField.to_python treats everything except \"false\" and \"0\" as True. A search for foo ... all True rows are returned.'"
    }
   ],
   "other": [
    {
-    "summary": "Quoted empty term becomes field__exact=None (IS NULL) for integer/decimal/date/UUID fields",
-    "severity": "should fix before merge",
+    "summary": "Quoted empty term becomes exact=None, which matches NULL rows",
+    "severity": "should be fixed before merge",
     "verdict": "VALID",
-    "reason": "Form fields return None for '' without raising; Q(exact=None) becomes isnull; base Cast matched nothing."
+    "reason": "Confirmed: '' -> forms.IntegerField.to_python -> None -> IS NULL; reachable via q=\"\"."
    },
    {
-    "summary": "fk__exact runs a ModelChoiceField query per term and skips the lookup if the row isn't in the default-manager queryset",
-    "severity": "Lower",
+    "summary": "fk__exact runs a query per term via ModelChoiceField and follows the default manager",
+    "severity": "Lower-severity",
     "verdict": "VALID",
-    "reason": "ForeignKey.formfield uses ModelChoiceField over _default_manager and to_python queries. The claim that limit_choices_to is respected is inaccurate, since formfield() alone doesn't apply it, but the core finding holds."
+    "reason": "forms/models.py:1588 queryset.get(). The limit_choices_to detail is wrong, as it is not applied by formfield() alone."
    },
    {
-    "summary": "formfield() rebuilt for every term and lookup",
+    "summary": "formfield() is rebuilt for every term and lookup",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "True (formfield() is called inside the per-bit loop), but it is a minor efficiency nit."
+    "reason": "True (options.py:1193 runs inside the per-bit loop) but only a micro-optimisation."
    },
    {
-    "summary": "Narrow test coverage and missing release note",
+    "summary": "New tests are narrow; release note worth considering",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "Test and docs suggestions, not code defects."
+    "reason": "Test and docs nit."
    }
   ],
   "states_limits": true,
-  "claims_unrun_execution": false
+  "claims_unrun_execution": true
  },
- "skill-maps": {
+ "skill-v2-r1": {
   "known": [
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of choices fields or TypedChoiceField."
+    "evidence": "No mention of choices fields / TypedChoiceField or a ValueError/500."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"forms.BooleanField.to_python (django/forms/fields.py:816-826) never raises. Anything other than false or 0 goes through bool(value), so foo becomes True. The query becomes flag = True.\""
+    "evidence": "'[High] BooleanField exact search now matches every True row for any non-empty term ... foo converts to True instead of raising ValidationError. The query becomes bool = True.'"
    }
   ],
   "other": [
    {
-    "summary": "Nullable BooleanField: NullBooleanField.to_python returns None for unknown strings, so the lookup becomes IS NULL",
-    "severity": "Medium (part of boolean finding)",
+    "summary": "Empty quoted term \"\" turns into an IS NULL search",
+    "severity": "Medium",
     "verdict": "VALID",
-    "reason": "Verified the null=True form_class selection and the NullBooleanField.to_python else-branch returning None."
+    "reason": "Confirmed via unescape_string_literal and forms.IntegerField.to_python('') returning None; exact=None is IS NULL."
    },
    {
-    "summary": "FK/OneToOne __exact search hits the DB per term through ModelChoiceField.to_python and passes a model instance",
-    "severity": "Low",
+    "summary": "fk__exact runs a DB .get() per term via ModelChoiceField; ids can be silently dropped",
+    "severity": "Medium",
     "verdict": "VALID",
-    "reason": "prev_field is the relation; ForeignKey.formfield gives ModelChoiceField, whose to_python calls queryset.get()."
+    "reason": "forms/models.py:1588 confirmed. The limit_choices_to sub-claim is wrong, though default-manager filtering does apply."
    },
    {
-    "summary": "Date/DateTime exact matching now depends on form input formats (explicitly not traced)",
-    "severity": "none",
-    "verdict": "NOISE",
-    "reason": "Speculative and explicitly untraced; no concrete defect stated."
+    "summary": "m2m__exact: ModelMultipleChoiceField.to_python splits the string into characters via frozenset and hands ORM objects to the lookup",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "to_python -> _check_values does frozenset(value) on a str, so each character is a pk. The result is list(qs) of instances (not a queryset as stated), and it is passed to m2m__exact. Behaviour is wrong or broken for a legal search_fields entry."
    }
   ],
   "states_limits": true,

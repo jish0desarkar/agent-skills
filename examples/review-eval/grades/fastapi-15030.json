@@ -1,158 +1,205 @@
 {
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "No mention of status_code or dependency-set status being ignored in the SSE branch."
+   },
+   {
+    "id": "K2",
+    "verdict": "CAUGHT",
+    "evidence": "\"`data_str.splitlines()` splits on more than the line terminators SSE recognizes (\\n, \\r, \\r\\n). It splits on U+2028, \\x0b, \\x0c, \\x1c-\\x1e and \\x85 ... A payload ending in \"\\n\" loses that newline.\""
+   },
+   {
+    "id": "K3",
+    "verdict": "MISSED",
+    "evidence": "No mention of include_router/add_api_route losing stream_item_type."
+   }
+  ],
+  "other": [
+   {
+    "summary": "event/id written unescaped; CR/LF lets a caller inject SSE fields (only id is checked, and only for NUL)",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "sse.py:200 and :207 write f\"event: {event}\" / f\"id: {id}\"; _check_id_no_null only rejects \\0. The cited line :172 is wrong, but the claim holds."
+   },
+   {
+    "summary": "Handler picks SSE from response_class alone, so a non-generator endpoint with EventSourceResponse crashes in iterate_in_threadpool",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "routing.py:371 vs :926; only is_json_stream is passed (:951). A coroutine reaches iterate_in_threadpool and raises TypeError. It happens mid-stream rather than as a clean 500, and 'worked before this PR' is overstated."
+   },
+   {
+    "summary": "Producer exceptions (e.g. ResponseValidationError) come out of the anyio task group wrapped in an ExceptionGroup, unlike JSONL",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "_producer runs in tg (routing.py:546); anyio 4 wraps child-task errors. JSONL raises directly. Low impact because the response has already started."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
  "baseline": {
   "known": [
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of status_code, _build_response_args, or a dependency-set Response status being ignored in the SSE branch."
+    "evidence": "No mention of status codes in the SSE response."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"`raw_data` is altered by `str.splitlines()`... also splits on `\\x0b`, `\\x0c`, `\\x1c`\u2013`\\x1e`, `\\x85`, `\\u2028` and `\\u2029`. These aren't SSE line terminators... It drops a trailing newline: \"a\\n\" becomes one line.\" Fix: re.split(r\"\\r\\n|\\r|\\n\", s)."
+    "evidence": "\"`splitlines()` also splits on `\\x0b`, `\\x0c`, `\\x1c`\u2013`\\x1e`, `\\x85`, `\\u2028` and `\\u2029`. These aren't SSE line terminators ... It drops a trailing newline: `\"a\\n\"` becomes one line.\" Fix: re.split(r\"\\r\\n|\\r|\\n\", s)."
    },
    {
     "id": "K3",
     "verdict": "MISSED",
-    "evidence": "No mention of include_router/add_api_route losing stream_item_type in OpenAPI."
+    "evidence": "No mention of include_router."
    }
   ],
   "other": [
    {
-    "summary": "Non-generator endpoint with response_class=EventSourceResponse enters the SSE branch and crashes, because the handler recomputes is_sse_stream at routing.py:371 instead of receiving the route flag (926), unlike is_json_stream (951).",
+    "summary": "Non-generator endpoint with response_class=EventSourceResponse enters the SSE branch and crashes; pass route.is_sse_stream into the handler",
     "severity": "Likely bug",
     "verdict": "VALID",
-    "reason": "Confirmed lines 371/491/926/951. A plain async def goes to iterate_in_threadpool(coroutine) and fails with TypeError when iterated. X's stated mechanism (gen.__aiter__() -> AttributeError) is the wrong branch, but the crash is real."
+    "reason": "routing.py:371/:491 vs :926/:951 confirmed. B's stated mechanism (gen.__aiter__ -> AttributeError) is wrong: it goes through iterate_in_threadpool and raises TypeError. The defect itself holds."
    },
    {
-    "summary": "Field injection: event/id written unescaped with no CR/LF check (heading also lists retry).",
+    "summary": "Field injection via CR/LF in event/id",
     "severity": "Likely bug",
     "verdict": "VALID",
-    "reason": "format_sse_event writes f\"event: {event}\" / f\"id: {id}\"; only id has a \\0 validator. The retry part is wrong (int, ge=0), but the event/id core holds."
+    "reason": "sse.py:200/:207 unescaped; id validator only checks \\0."
    },
    {
-    "summary": "Generator/serialization errors surface as ExceptionGroup from the anyio task group, unlike JSONL which raises the original exception.",
+    "summary": "Generator/validation errors arrive wrapped in an ExceptionGroup from the task group",
     "severity": "Worth checking",
     "verdict": "VALID",
-    "reason": "_producer runs in anyio.create_task_group(); anyio 4.12.1 (uv.lock) always wraps. Impact is limited (Starlette collapses single-exception groups on the pre-2.4 path; the response has already started), but the behavior difference is real."
+    "reason": "anyio task group at routing.py:546 wraps child exceptions; JSONL path does not. Low impact because the response has already started."
    },
    {
-    "summary": "Task group held open across yield may raise 'cancel scope in a different task' on disconnect.",
+    "summary": "Task group held across yield may raise 'cancel scope in a different task' on disconnect",
     "severity": "Worth checking",
     "verdict": "NOISE",
-    "reason": "Speculative risk with no demonstrated trigger; the review itself asks for a test rather than showing a defect."
+    "reason": "Speculative, not shown to happen; B frames it as needing a test."
    },
    {
-    "summary": "ServerSentEvent with data=None cannot send JSON null.",
+    "summary": "ServerSentEvent(data=None) can't send JSON null",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "True by design (None means no data field); an API design limitation, not a defect."
+    "reason": "Design limitation; raw_data=\"null\" covers it."
    },
    {
-    "summary": "_serialize_sse_item skips stream_item_field validation/include/exclude for ServerSentEvent; docs should say so.",
+    "summary": "ServerSentEvent items skip stream_item_field validation and include/exclude; docs should say so",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "The code comment says it is intentional; this is a docs request."
+    "reason": "Intentional per code comment (routing.py:499); docs request."
    },
    {
-    "summary": "max_buffer_size=1 makes the generator run ahead of the client.",
+    "summary": "max_buffer_size=1 makes the generator run one item ahead",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "Accurate observation of a deliberate buffering design; no defect."
+    "reason": "True, but a design note, not a defect."
    }
   ],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill": {
+ "baseline-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of declared status_code or dependency Response status being ignored."
+    "evidence": "Not mentioned."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"SSE framing uses `str.splitlines()`, which splits on characters the SSE spec does not treat as line breaks... U+2028, U+2029, U+0085, `\\x0b`, `\\x0c` or `\\x1c`\u2013`\\x1e`\" plus \"`raw_data=\"a\\n\"` loses its empty or trailing line\"; fix re.split(r\"\\r\\n|\\r|\\n\", s)."
+    "evidence": "\"A trailing newline in `raw_data` is lost too: `\"a\\n\"` becomes one line ... `splitlines()` also splits on characters like `\\x0b`, `\\x0c`, `\\x1c` and `\\u2028`, which the SSE spec doesn't treat as line breaks.\""
    },
    {
     "id": "K3",
     "verdict": "MISSED",
-    "evidence": "No mention of include_router/stream_item_type."
+    "evidence": "Not mentioned."
    }
   ],
   "other": [
    {
-    "summary": "Non-generator endpoint with response_class=EventSourceResponse crashes: the handler recomputes is_sse_stream (371) and ignores the route flag (926); iterate_in_threadpool is called on a dict/Response.",
-    "severity": "Medium",
+    "summary": "Header/field injection through CR/LF in event and id",
+    "severity": "most important",
     "verdict": "VALID",
-    "reason": "Confirmed lines 371/491/926/951 and that get_request_handler has no is_sse_stream parameter. The iterate_in_threadpool -> TypeError mechanism is correct."
+    "reason": "sse.py:200/:207; only \\0 rejected for id, nothing for event."
    },
    {
-    "summary": "event/id not checked for CR/LF, allowing injected SSE fields.",
-    "severity": "Low",
+    "summary": "Producer errors may come out as an ExceptionGroup, unlike JSONL",
+    "severity": "unconfirmed",
     "verdict": "VALID",
-    "reason": "Only the _check_id_no_null validator exists; event/id are interpolated unescaped in format_sse_event."
+    "reason": "Task group at routing.py:546; anyio 4 wraps. Low impact."
    },
    {
-    "summary": "Streaming errors are wrapped in ExceptionGroup, unlike JSONL.",
-    "severity": "Low",
-    "verdict": "VALID",
-    "reason": "anyio 4 task group in _async_stream_sse wraps _producer exceptions; JSONL iterates directly. Real but low impact (Starlette may collapse; the response has already started)."
-   },
-   {
-    "summary": "sse_aiter is never aclose()d; on disconnect the user generator stays suspended until GC.",
-    "severity": "Low",
+    "summary": "ServerSentEvent.data ignores response_model_* serialization options; can't send JSON null",
+    "severity": "none",
     "verdict": "NOISE",
-    "reason": "Explicitly unconfirmed; plausible but speculative cleanup concern with no demonstrated user-visible failure."
+    "reason": "Documented intentional bypass (routing.py:499) plus a design limitation."
+   },
+   {
+    "summary": "Union return type Model | ServerSentEvent isn't excluded from stream_item_type, so OpenAPI describes ServerSentEvent as data",
+    "severity": "Minor",
+    "verdict": "VALID",
+    "reason": "routing.py:816-820 uses lenient_issubclass on the whole annotation; a Union isn't a subclass, so it feeds contentSchema at openapi/utils.py."
+   },
+   {
+    "summary": "Buffer of 1 means the generator runs one ahead",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "Design note."
+   },
+   {
+    "summary": "Yield inside task group may raise 'cancel scope in a different task'",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "Speculative; C says it is unconfirmed."
+   },
+   {
+    "summary": "Uncommitted README.md personal note shouldn't be committed",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Not about the PR; the worktree here is clean, so it can't be reproduced."
    }
   ],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill-maps": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "No mention of status_code handling in the SSE branch."
+    "evidence": "Trace table: \"`status_code` is ignored, as in JSONL.\" marked \"OK\". It saw the symptom but dismissed it, so no defect reported."
    },
    {
     "id": "K2",
     "verdict": "CAUGHT",
-    "evidence": "\"`splitlines()` in `format_sse_event` splits on characters that aren't SSE line terminators... the SSE spec only treats `\\n`, `\\r` and `\\r\\n` as line terminators\" and \"The same call also drops a trailing newline in `raw_data`\"."
+    "evidence": "\"`splitlines()` corrupts payloads containing U+2028, U+2029, U+0085 ... SSE itself only treats `\\r`, `\\n` and `\\r\\n` as line breaks. Fix direction: split on `\\r\\n`, `\\r` or `\\n` only\". Also covers empty raw_data; omits the trailing-newline case."
    },
    {
     "id": "K3",
     "verdict": "MISSED",
-    "evidence": "No mention of include_router/stream_item_type."
+    "evidence": "Not mentioned."
    }
   ],
   "other": [
    {
-    "summary": "Non-generator endpoint with response_class=EventSourceResponse crashes at request time because the handler ignores the route-level is_sse_stream.",
+    "summary": "Non-generator endpoint with EventSourceResponse takes the SSE branch and crashes; route's is_sse_stream not passed to handler; OpenAPI disagrees",
     "severity": "Medium",
     "verdict": "VALID",
-    "reason": "Confirmed 371/491/926/951. Minor slips: the failure comes after headers are sent (broken 200 stream rather than a clean 500), and OpenAPI still emits text/event-stream via the generic branch, just without itemSchema."
+    "reason": "routing.py:371 vs :926/:951 confirmed. iterate_in_threadpool(coro) raises TypeError. The '.__aiter__() on a plain value' detail and the '500' are slightly off (it fails mid-stream)."
    },
    {
-    "summary": "event/id not validated for CR/LF; user-derived values can forge data:/id: fields.",
+    "summary": "SSE field injection through CR/LF in event and id",
     "severity": "Medium",
     "verdict": "VALID",
-    "reason": "Only the \\0 check on id; event has no validator; both interpolated raw."
-   },
-   {
-    "summary": "Keepalive generator yields inside an anyio task group (cancel-scope-in-different-task risk) and errors surface as ExceptionGroup.",
-    "severity": "Low, unverified",
-    "verdict": "NOISE",
-    "reason": "Self-labelled unverified risk. The ExceptionGroup part is true, but the finding as a whole is framed as speculation to test, not a demonstrated defect."
-   },
-   {
-    "summary": "OpenAPI output uses itemSchema (OpenAPI 3.2) while openapi_version defaults to 3.1.0.",
-    "severity": "none (minor observation)",
-    "verdict": "NOISE",
-    "reason": "True (default 3.1.0 per applications.py; itemSchema added in openapi/utils.py), but a spec/docs nit; the schema still validates."
+    "reason": "sse.py:200/:207 unescaped; _check_id_no_null only rejects \\0."
    }
   ],
   "states_limits": true,

@@ -81,8 +81,7 @@ Some prompts that work well:
 
 ## Examples
 
-- [Eval: verified-code-review on 10 real pull requests](./examples/review-eval/README.md). Blind reviews of 10 merged aiohttp, FastAPI and Django PRs (8 later needed fixes), with and without the skill, graded against the maintainers' fixes. The skill found the same bugs as stock Claude Code, with less noise, and never touched the checkout; stock changed it in 7 of 10 runs. Every review, grade and script is included.
-- [Reviewing a PR that shipped a regression](./examples/aiohttp-12988/README.md). A one-line aiohttp change passed review and shipped in 3.14.2 with a WebSocket bug. Two blind Claude Code sessions, with and without `verified-code-review`, both found it. The page shows both reviews, how they were scored against the maintainers' fix, and what the skill changed.
+- [Eval: verified-code-review against stock Claude Code](./examples/review-eval/README.md). On 14 real PRs that later shipped bugs, the skill found **50% more of the bugs** than stock Claude Code, including bugs stock never caught and bugs in holdout PRs it was never tuned on, with **about 10× less noise** and fewer false alarms, at the same cost. Every review, grade and script is included.
 
 ## The skills
 
@@ -105,7 +104,7 @@ Some prompts that work well:
 
 | Skill | What it does |
 |---|---|
-| [verified-code-review](./skills/review/verified-code-review/SKILL.md) | A review that never edits code. The agent fetches the exact commits under review, follows each changed behavior into its callers and callees, and compares against the old version to separate new bugs from old ones. It reports only bugs it can prove, each with a severity, the input that triggers it, and a file and line. Build and lint results never count as passing tests. It comes with a [review procedure](./skills/review/verified-code-review/references/review-procedure.md) and a [risk map template](./skills/review/verified-code-review/templates/REVIEW_INDEX.md) that covers auth, migrations, retries, caches, background jobs and LLM calls. |
+| [verified-code-review](./skills/review/verified-code-review/SKILL.md) | A review that never edits code. The agent fetches the exact commits under review, follows each changed behavior into its callers and callees, and compares against the old version to separate new bugs from old ones. It reports only bugs it can prove, each with a severity, the input that triggers it, and a file and line. Build and lint results never count as passing tests. It comes with a [review procedure](./skills/review/verified-code-review/references/review-procedure.md) and a [risk map template](./skills/review/verified-code-review/templates/REVIEW_INDEX.md) that covers auth, migrations, retries, caches, background jobs and LLM calls. In a [blind eval](./examples/review-eval/README.md) on real PRs it found 50% more of the known bugs than stock Claude Code, with a tenth of the noise. |
 
 ### Codebase knowledge
 

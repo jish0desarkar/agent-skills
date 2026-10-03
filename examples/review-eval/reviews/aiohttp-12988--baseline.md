@@ -1,4 +1,4 @@
-# aiohttp-12988: stock Claude Code (built-in code-review)
+# aiohttp-12988: stock Claude Code, run 1
 
 The session's final review, unedited except that scratch paths were removed.
 

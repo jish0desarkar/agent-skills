@@ -1,104 +1,147 @@
 {
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "Covers both K1 failures. (a): \"Crash on `__` lookups that end in a property or other non-field attribute ... get_fields_from_path() then calls _meta.get_field(), which raises FieldDoesNotExist ... Example: list_display = [\"parent__some_property\"]\". (b): \"Crash on `__` lookups that end in a ForeignKey ... getattr(result, f.name) ... Example: parent__category ... raises AttributeError, because Child has no category.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Readonly fields: a related FK/M2M now goes through get_admin_url(f.remote_field, ...) or value.all(), and these cases are likely wrong",
+    "severity": "Bug (unranked)",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "_check_readonly_fields_item raises E035 for any `__` path (it fails both hasattr(model, name) and get_field), so AdminReadonlyField.contents never receives a related path in normal use."
+   },
+   {
+    "summary": "Related choices/date fields in the changelist now get display_for_field formatting and nowrap classes, and nothing tests this",
+    "severity": "Bug (unranked, hedged as possibly an improvement)",
+    "verdict": "NOISE",
+    "reason": "True: a non-None f takes the display_for_field branch. But it is a rendering change the review itself says may be an improvement, not a defect."
+   },
+   {
+    "summary": "Missing tests for a related property, FK, choices or date field, and for readonly fields",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Test-coverage nit."
+   },
+   {
+    "summary": "assertNotContains('>True<') is brittle",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Test nit."
+   },
+   {
+    "summary": "No ticket reference in the test, and no release note or docs update",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Docs/process nit."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"Related FK as the last list_display segment now reads the wrong attribute, or crashes ... Trigger: list_display = [\"parent__owner\"] ... the changelist raises AttributeError and returns a 500 ... list_display = [\"parent__parent\"] would show the wrong object.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Every related field type now goes through display_for_field (choice labels, nowrap, avoid_link), which is undocumented; the readonly path might mishandle a terminal relation",
+    "severity": "Medium",
+    "verdict": "NOISE",
+    "reason": "The rendering change is true but the review says it is probably better output, so the complaint is about missing docs. The review itself notes that readonly_fields checks reject `__` paths and that it couldn't trigger the readonly case."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
  "baseline": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "Item 1: \"list_display = [\"parent__parent\"] ... items_for_result takes the ManyToOneRel branch and calls getattr(result, f.name) ... raises AttributeError or reads the wrong attribute\"; Item 2: \"The new get_fields_from_path(opts.model, name) call is unguarded. It raises on any such name [properties/methods]. items_for_result only catches ObjectDoesNotExist.\""
+    "evidence": "Covers both K1 failures. (b): \"list_display = [\"parent__parent\"] (a ForeignKey as the final field) probably breaks ... getattr(result, f.name) ... raises AttributeError or reads the wrong attribute.\" (a): \"get_fields_from_path() can raise FieldDoesNotExist and crash the changelist ... properties and methods on the related model ... items_for_result only catches ObjectDoesNotExist.\""
    }
   ],
   "other": [
    {
-    "summary": "get_fields_from_path starts from opts.model, which may be wrong for deferred/proxy instances",
-    "severity": "blocker-adjacent (listed as problem 3)",
+    "summary": "The new call starts from the wrong model (opts.model) for deferred or proxy instances, and walks the path a second time",
+    "severity": "none (listed under Problems)",
     "verdict": "FALSE_POSITIVE",
-    "reason": "Deferred model classes no longer exist; a proxy's _meta has the same fields, so traversal from obj._meta.model resolves identically."
+    "reason": "Deferred instances have no dynamic classes in modern Django, and proxy models share the concrete model's fields, so get_fields_from_path resolves the same fields. The double traversal is only a performance nit."
    },
    {
-    "summary": "Path is traversed twice (getattr walk then get_fields_from_path)",
-    "severity": "none",
+    "summary": "Every related lookup now goes through display_for_field instead of display_for_value, changing output for choices, FileField and JSONField, and adding nowrap",
+    "severity": "none (listed under Problems)",
     "verdict": "NOISE",
-    "reason": "Minor efficiency point; not a defect."
+    "reason": "True, but it is an undocumented rendering change rather than a defect."
    },
    {
-    "summary": "All related lookups now go through display_for_field instead of display_for_value (choices, File/JSON fields, decimals change output)",
-    "severity": "none (problem 4)",
-    "verdict": "VALID",
-    "reason": "f is set for every __ path; items_for_result then calls display_for_field for non-FK finals, which renders choice labels, file links and the like differently."
-   },
-   {
-    "summary": "Related columns lose attr.empty_value_display and short_description handling",
-    "severity": "none (problem 4)",
+    "summary": "Related fields lose attr.empty_value_display and short_description handling",
+    "severity": "none (listed under Problems)",
     "verdict": "FALSE_POSITIVE",
-    "reason": "The PR doesn't change attr (still the traversed value), so empty_value_display lookup is unchanged; short_description is handled in label_for_field, which the PR doesn't touch."
+    "reason": "attr is still the walked value, exactly as before the PR, so getattr(attr, 'empty_value_display') behaves the same. items_for_result never reads short_description."
    },
    {
-    "summary": "readonly_fields = ['parent__x'] now gets non-None f in AdminReadonlyField.contents",
-    "severity": "none",
-    "verdict": "NOISE",
-    "reason": "Admin check E035 rejects __ paths in readonly_fields (hasattr/get_field fail); reachable only via dynamic get_readonly_fields, and the review only says it's untested/undiscussed."
+    "summary": "A readonly_fields entry like parent__x now gets a non-None f and goes down the ForeignObjectRel/display_for_field branches",
+    "severity": "none (listed under Problems)",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "E035 rejects `__` paths in readonly_fields, so this path is not reachable in normal use."
    },
    {
-    "summary": "Missing tests (non-boolean related field, FK final, None parent, readonly) and weak assertNotContains",
-    "severity": "smaller",
+    "summary": "Tests: no non-boolean related field, FK final field, None parent or readonly cases, and assertNotContains is weak",
+    "severity": "minor",
     "verdict": "NOISE",
-    "reason": "Test nit."
+    "reason": "Test nits."
    },
    {
-    "summary": "Docs/release note missing; model field addition may affect other tests; control flow style",
-    "severity": "smaller",
+    "summary": "Check that the new Child.is_active column doesn't affect other tests",
+    "severity": "minor",
     "verdict": "NOISE",
-    "reason": "Docs/style nits."
+    "reason": "Speculative; the field has a default."
+   },
+   {
+    "summary": "Docs and release note are missing",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "Docs nit."
+   },
+   {
+    "summary": "The LOOKUP_SEP check's placement makes the control flow hard to follow",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "Style."
    }
   ],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"Example: GrandChildAdmin.list_display = [\"parent__parent\"] ... f is Child.parent, and getattr(grandchild, \"parent\") happens to resolve (wrong object). With [\"parent__other_fk\"] ... it raises AttributeError, and the changelist returns a 500.\""
+    "evidence": "\"A related ForeignKey in list_display now raises AttributeError ... Trigger: a list_display entry like \"parent__grandparent\" ... getattr(result, f.name). f.name is \"grandparent\", but result is the base-model row ... the whole changelist page fails with a 500.\""
    }
   ],
   "other": [
    {
-    "summary": "Every non-boolean related column now formatted by display_for_field (choices labels, nowrap, etc.), unannounced behavior change",
+    "summary": "Every related lookup now goes through display_for_field (choice labels, URL links, nowrap), which is undocumented",
     "severity": "Medium",
-    "verdict": "VALID",
-    "reason": "f is now non-None for all __ paths, so items_for_result uses display_for_field; choice/decimal/file rendering differs from display_for_value."
+    "verdict": "NOISE",
+    "reason": "True, but the review calls it arguably an improvement; the complaint is about missing release notes and docs."
    },
    {
-    "summary": "get_fields_from_path re-resolves per row/column; docs and release notes not updated",
-    "severity": "Low",
-    "verdict": "NOISE",
-    "reason": "Performance/docs nit, not a defect."
-   }
-  ],
-  "states_limits": true,
-  "claims_unrun_execution": false
- },
- "skill-maps": {
-  "known": [
-   {
-    "id": "K1",
-    "verdict": "CAUGHT",
-    "evidence": "\"list_display = [\"parent__other_fk\"] ... runs getattr(result, f.name) ... raises AttributeError\" and \"a list_display ... entry such as parent__some_property ... get_fields_from_path calls _meta.get_field(), which doesn't know properties ... raises FieldDoesNotExist ... Changelist: 500 error.\""
-   }
-  ],
-  "other": [
-   {
-    "summary": "Every related lookup goes through display_for_field (choices, dates, decimals, nowrap); readonly path treats relation endpoints specially, e.g. parent__children",
-    "severity": "Medium",
-    "verdict": "VALID",
-    "reason": "Core claim true: f is set for all __ paths, so display_for_field changes output. The parent__children example is wrong (auto_created \u2192 display_for_value in changelist; E109/E035 reject it) and readonly __ paths are rejected by checks, but the main issue holds."
-   },
-   {
-    "summary": "Test gaps (FK-final, non-field attr, None parent, readonly), weak assertNotContains, missing docs/release note",
-    "severity": "Low",
-    "verdict": "NOISE",
-    "reason": "Test/docs nits."
+    "summary": "A readonly field like parent__is_active now gets display_for_field, and a related FK there hits get_admin_url on the wrong model's field",
+    "severity": "minor",
+    "verdict": "FALSE_POSITIVE",
+    "reason": "_check_readonly_fields_item raises E035 for `__` paths, so this is unreachable in normal use."
    }
   ],
   "states_limits": true,

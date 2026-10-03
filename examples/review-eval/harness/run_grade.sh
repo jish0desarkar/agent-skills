@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: run_grade.sh <pr-id>  — blind grading session for one PR (prepare it first with grade.py)
 EV="$(cd "$(dirname "$0")" && pwd)"
-pid=$1; dir="$EV/grades/$pid"
+pid=$1; dir="$EV/${GRADE_DIR:-grades}/$pid"
 cd "$dir/repo" || exit 1
 start=$(date +%s)
 env -i HOME="$HOME" USER="$USER" LOGNAME="$LOGNAME" SHELL=/bin/zsh LANG=en_US.UTF-8 TMPDIR="$TMPDIR" \

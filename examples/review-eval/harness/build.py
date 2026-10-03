@@ -22,6 +22,11 @@ PRS = [
     ("django-20538", "django/django", 20538, "main", "django-a", False),
     ("django-21420", "django/django", 21420, "main", "django-b", False),
     ("django-21344", "django/django", 21344, "main", "django-b", True),
+    # Holdouts: chosen after the v2 trace table was written; not used to design it.
+    ("pandas-63473", "pandas-dev/pandas", 63473, "main", None, False),
+    ("pandas-64529", "pandas-dev/pandas", 64529, "main", None, False),
+    ("django-19277", "django/django", 19277, "main", None, False),
+    ("django-19925", "django/django", 19925, "main", None, False),
 ]
 # Each map is built at the merge base of this PR, which precedes every PR that uses the map.
 MAP_AT = {"aiohttp": "aiohttp-12988", "fastapi": "fastapi-15030", "django-a": "django-17554", "django-b": "django-19534"}
@@ -122,11 +127,11 @@ if __name__ == "__main__":
     what = sys.argv[1]
     if what == "prs":
         only = set(sys.argv[2:])
-        for pid, repo, n, branch, _, _ in PRS:
+        for pid, repo, n, branch, mid, _ in PRS:
             if only and pid not in only:
                 continue
             m = build_pr(pid, repo, n, branch)
-            for arm in ARMS:
+            for arm in (ARMS if mid else ()):
                 checkout(pid, arm)
             print(f"{pid}: base {m['baseRefOid'][:10]} ({m['baseDate'][:10]}) head {m['headRefOid'][:10]} ({m['headDate'][:10]}) +{m['additions']}/-{m['deletions']} files={len(m['files'])} commits={len(m['commits'])}", flush=True)
     elif what == "maps":

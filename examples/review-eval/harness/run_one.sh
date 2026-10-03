@@ -13,7 +13,11 @@ if [ "$kind" = review ]; then
   prompt="Review PR #$n
 
 (Environment note: this sandbox has no internet access, but \`origin\` is a local mirror of the GitHub repository that includes pull request refs, and \`gh\` works offline against it.)"
-  plugin=(); [ "$arm" != baseline ] && plugin=(--plugin-dir "$EV/plugin")
+  case "$arm" in
+    baseline*) plugin=() ;;
+    skill-v*) plugin=(--plugin-dir "$EV/plugin-$(echo "$arm" | sed -E "s/^skill-(v[0-9]+).*/\1/")") ;;
+    *) plugin=(--plugin-dir "$EV/plugin") ;;
+  esac
   tools="Task,Bash,Edit,Write,Read,Skill,ReportFindings,ToolSearch,TaskStop,SendMessage,ListAgents,NotebookEdit,Monitor,EnterWorktree,ExitWorktree"
   budget=10; [ "$pid" = django-17554 ] && budget=20
   stub="$EV/prs/$pid.json"
