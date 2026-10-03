@@ -1,0 +1,95 @@
+{
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Says 'PR #19277 looks correct, and I found no bugs'; never mentions that the sorting now happens before _prepare_related_fields_for_save."
+   }
+  ],
+  "other": [
+   {
+    "summary": "New test only checks isinstance(obj.id, datetime); should refetch by pk",
+    "severity": "nit (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "True per tests/bulk_create/tests.py, but it is a test-strength nit."
+   },
+   {
+    "summary": "Docs changed but no release note",
+    "severity": "nit (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "Docs/process nit."
+   },
+   {
+    "summary": "Test doesn't cover databases that can't return rows",
+    "severity": "nit (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "Test is gated on can_return_rows_from_bulk_insert; coverage nit, not a defect."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "'I found no blocking bugs'; the related-field preparation order is never discussed."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Add a mixed-batch test (explicit pk plus DatabaseDefault pk)",
+    "severity": "minor (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "Test coverage suggestion."
+   },
+   {
+    "summary": "Private method needs a docstring for its tuple return; check other callers",
+    "severity": "minor (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "bulk_create is the only caller; docstring is style."
+   },
+   {
+    "summary": "Docs say pk 'will not be set' but it stays a DatabaseDefault on non-returning backends",
+    "severity": "minor (non-blocking)",
+    "verdict": "NOISE",
+    "reason": "Accurate observation about pre-existing behaviour; docs wording nit."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "'Objects are now classified as with-pk or without-pk before _prepare_related_fields_for_save() runs' with trigger 'a model whose primary key is a OneToOneField or ForeignKey. Assign an unsaved related object to it, save that object, then pass the model to bulk_create()... The object goes to objs_without_pk.' Fix: call the preparation step before sorting. Impact understated as Low and 'mostly harmless'; it actually lands on the no-pk path, where the assertion can fail."
+   }
+  ],
+  "other": [],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "'No actionable findings'; traces the get_pk_value_on_save ordering but not the related-field preparation."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Test doesn't cover mixed batches or backends that can't return rows",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Coverage nit noted under limits."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

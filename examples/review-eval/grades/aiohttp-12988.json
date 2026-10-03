@@ -1,43 +1,30 @@
 {
- "skill": {
+ "skill-v2-r1": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"On the ping header, the check at :408 is true because _compressed is NOT_SET. So _compressed becomes COMPRESSED_FALSE. The new if opcode <= 0x7 guard skips the ping, so _frame_fin stays False... On the compressed data frame... the elif rsv1 branch raises PROTOCOL_ERROR\"; fix: \"Don't let control frames latch _compressed\""
+    "evidence": "\"The control frame passes the latch check at line 408 because `_compressed` is `NOT_SET`. That sets `_compressed = COMPRESSED_FALSE`... `_frame_fin` stays `False`... The first compressed data frame (RSV1=1, FIN=1)... raises 'Received frame with non-zero reserved bits'\"; labelled a regression introduced in this PR."
    }
   ],
-  "other": [
-   {
-    "summary": "Test only covers a mid-message ping, not a control frame first; docs box unticked",
-    "severity": "Low",
-    "verdict": "NOISE",
-    "reason": "Test and checklist note, not a code defect. The test-gap part is accurate: the PR's test feeds fragment, ping, continuation."
-   }
-  ],
+  "other": [],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill-maps": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"The ping reaches the latch at line 408 and sets _compressed = COMPRESSED_FALSE... line 420 is skipped for the ping, so _frame_fin stays False... The first compressed TEXT or BINARY frame then... falls into elif rsv1: and raises WebSocketError(PROTOCOL_ERROR...)\""
+    "evidence": "\"The ping header reaches the compression latch at line 408... latches `COMPRESSED_FALSE`... `_frame_fin` stays `False`... `elif rsv1` then raises WebSocketError(PROTOCOL_ERROR...)\"; \"Before this PR, the ping set it to `True`.\""
    }
   ],
   "other": [
    {
-    "summary": "_handle_frame receives the stale self._frame_fin for interleaved control frames; visible in the 'Invalid close frame: {fin}' error text",
-    "severity": "Low",
+    "summary": "Control frames with RSV1 set should be rejected and validated separately from the compression latch",
+    "severity": "none (part of root cause/fix direction)",
     "verdict": "VALID",
-    "reason": "Confirmed: :515-516 passes self._frame_fin, which control frames no longer update after the PR. fin is used only in the close-frame error f-string at :316, reachable with a 1-byte close payload. Introduced by the PR, cosmetic only."
-   },
-   {
-    "summary": "New test never covers the ping-first sequence",
-    "severity": "none",
-    "verdict": "NOISE",
-    "reason": "Test-coverage note. Accurate, but not a separate defect."
+    "reason": "At head, a control frame with RSV1 set when _frame_fin is True only latches _compressed (L408) and is not rejected. This existed before the PR. The fix added this check. It cites RFC 6455; RFC 7692 \u00a76.1 is the precise source."
    }
   ],
   "states_limits": true,
@@ -48,21 +35,58 @@
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"The compression-state block just above it still runs for every frame, including control frames... _compressed becomes COMPRESSED_FALSE... After the PR it stays False... The first compressed text or binary frame (rsv1=1)... hits elif rsv1 and raises PROTOCOL_ERROR\""
+    "evidence": "\"The peer sends a ping (fin=1, rsv1=0) before any data... `_compressed` becomes `COMPRESSED_FALSE`. Before the PR, `_frame_fin` then became `True`. After the PR it stays `False`. The first compressed text or binary frame (rsv1=1)... hits `elif rsv1` and raises PROTOCOL_ERROR.\""
    }
   ],
   "other": [
    {
-    "summary": "Close-frame error text shows a stale fin because _handle_frame gets self._frame_fin",
+    "summary": "_handle_frame gets a stale self._frame_fin for control frames, so the close error text 'Invalid close frame: {fin}...' shows a stale value",
     "severity": "Minor",
     "verdict": "VALID",
-    "reason": "Same check as Y: the stale value reaches only the f-string at :316. A real behavior change introduced by the PR, cosmetic only."
+    "reason": "L516 passes self._frame_fin. L316 prints fin in the close-frame error. This is introduced by the PR, but it only changes an error string."
    },
    {
     "summary": "Changelog entry is vague",
     "severity": "Minor",
     "verdict": "NOISE",
-    "reason": "Wording suggestion for CHANGES/12988.bugfix.rst."
+    "reason": "Changelog wording nit."
+   },
+   {
+    "summary": "reader_c.py is a symlink; test with Cython extensions before merging",
+    "severity": "Minor",
+    "verdict": "NOISE",
+    "reason": "The symlink fact is correct (mode 120000). The rest is process advice, not a defect."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"Control frame arrives first: the header check... sets `_compressed = COMPRESSED_FALSE`... With the PR, `_frame_fin` stays `False`. First compressed message: the next frame (RSV1 = 1, FIN = 1) takes the `elif rsv1` branch... Before the PR: the first ping set `_frame_fin = True`\". Line numbers are slightly off (405/416 vs actual 408/419-420)."
+   }
+  ],
+  "other": [
+   {
+    "summary": "No test for a ping between uncompressed fragments",
+    "severity": "Smaller point",
+    "verdict": "NOISE",
+    "reason": "Test-coverage nit. The control-frame-first test gap is part of K1."
+   },
+   {
+    "summary": "Check that reader_c.py picks up the same change and run the test with Cython",
+    "severity": "Smaller point",
+    "verdict": "NOISE",
+    "reason": "reader_c.py is a symlink to reader_py.py at head (mode 120000), so there is nothing to sync. This is process advice."
+   },
+   {
+    "summary": "Changelog line is vague; should name permessage-deflate",
+    "severity": "Smaller point",
+    "verdict": "NOISE",
+    "reason": "Changelog wording nit."
    }
   ],
   "states_limits": true,

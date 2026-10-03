@@ -1,7 +1,8 @@
 # Review procedure
 
-Default procedure for `verified-code-review` when the repository has no review guide of
-its own. A repository can copy this file to `PR_REVIEW.md` and specialize it.
+Details behind the workflow in `SKILL.md`: local and staged reviews, snippets, comment
+triage and validation rules. A repository can copy this file to `PR_REVIEW.md` and
+specialize it.
 
 ## Establish the exact target
 

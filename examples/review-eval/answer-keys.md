@@ -8,7 +8,7 @@ defects). Ground truth comes from the maintainers' later fix commits.
 
 ## aiohttp-12988 — aio-libs/aiohttp#12988 (1 known defect)
 
-See [../aiohttp-12988/answer-key.md](../aiohttp-12988/answer-key.md). K1: a control frame that arrives before the first data frame latches
+K1: a control frame that arrives before the first data frame latches
 `_compressed = COMPRESSED_FALSE` while `_frame_fin` stays False, so the first compressed
 message is rejected with 1002 "non-zero reserved bits". Fix: aio-libs/aiohttp#13302.
 
@@ -92,3 +92,42 @@ message is rejected with 1002 "non-zero reserved bits". Fix: aio-libs/aiohttp#13
 
 No defect is known (no later fix references them). Every finding is checked against the code:
 valid, false positive or noise.
+
+# Holdouts (keys written before any holdout run; these PRs were not used to design the v2 trace table)
+
+## pandas-63473 — pandas-dev/pandas#63473, read_json follows the microsecond default (1 known defect)
+
+- K1: the string-column path in `Parser._try_convert_to_date` now tries
+  `to_datetime(..., format=f)` for `f in (None, "iso8601", "mixed")` and returns the first
+  parse that succeeds, dropping the nanosecond-bounds check (`.dt.as_unit("ns")`) the old path
+  had. That check rejected dateutil parses filled with default dates. Without it, ordinary
+  strings such as `"Jan"`, `"1st"`, `"T1"` in an index or date-eligible column parse to year-1
+  timestamps, so `read_json(df.to_json())` turns string labels into `0001-01-01...`.
+  Fix: pandas-dev/pandas#67975. CAUGHT needs the bogus-date acceptance (non-date strings now
+  become dates) with a concrete input.
+
+## pandas-64529 — pandas-dev/pandas#64529, fast path for full-slice setitem in ArrowExtensionArray (1 known defect)
+
+- K1: for a full (null) slice, `__setitem__` now sets `data = value`, adopting the boxed
+  value as the array's own `_pa_array` without a copy. Boxing can be zero-copy over memory the
+  caller still owns (`pa.array(numpy_array)`, masked arrays via `__arrow_array__`, or a
+  passed-in `pa.Array`/`ArrowExtensionArray`), so the array shares a buffer with the input:
+  mutating the numpy array afterwards changes the pandas array, and two DataFrames can end up
+  linked, violating Copy-on-Write. Fix: pandas-dev/pandas#67990.
+
+## django-19277 — django/django#19277, bulk_create with DB-generated primary keys (1 known defect)
+
+- K1: `_prepare_for_bulk_create()` now partitions objects with `_is_pk_set()` before calling
+  `obj._prepare_related_fields_for_save(operation_name="bulk_create")`, the call that copies a
+  late-saved related object's primary key onto the field (for example a primary-key
+  `OneToOneField` whose target was saved after the object was built). Such objects land in
+  `objs_without_pk`, which fails (an assertion on backends that return rows from bulk
+  inserts). Fix: c9ff757a55 (#37234), which moves the preparation call first. CAUGHT needs the
+  ordering problem with a concrete case.
+
+## django-19925 — django/django#19925, database-level delete options for ForeignKey (1 known defect)
+
+- K1: the PR removes `"on_delete"` from `Field.non_db_attrs` because the new database-level
+  options change the schema. As a result an `AlterField` that changes only a Python-level
+  `on_delete` (for example `CASCADE` to `PROTECT`) is no longer a no-op and performs schema
+  changes (rebuilding the constraint), where it used to touch nothing. Fix: 07d4f69c94 (#37260).

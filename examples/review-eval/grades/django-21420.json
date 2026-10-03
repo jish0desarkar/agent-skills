@@ -1,61 +1,80 @@
 {
- "skill-maps": {
+ "baseline-r2": {
   "known": [
    {
     "id": "K1",
-    "verdict": "PARTIAL",
-    "evidence": "\"Now `_is_pk_set()` returns False, so `_save_table` calls `meta.pk.get_pk_value_on_save(self)`\" \u2014 right mechanism, but the stated concrete effect (pk overwritten with None, inserted as NULL) is false; the real Python-default-over-db_default effect is not identified."
+    "verdict": "MISSED",
+    "evidence": "\"I found no correctness bugs in the code change itself.\" No mention of _save_table/get_pk_value_on_save or callers of _is_pk_set."
    }
   ],
   "other": [
    {
-    "summary": "save() on a db_default-only pk sets the pk to None and inserts NULL",
-    "severity": "High",
-    "verdict": "FALSE_POSITIVE",
-    "reason": "get_pk_value_on_save checks `if self.default:`, which is always true because NOT_PROVIDED is a class; get_default() then returns a fresh DatabaseDefault. When run on SQLite at the head, the INSERT used VALUES (1) / ('abc'), the same as at the base."
+    "summary": "Nested helper _is_set is named backwards (returns True when unset); comment placement odd",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "Confirmed in diff (def at base.py:713, not 712); naming/style only."
    },
    {
-    "summary": "Helper `_is_set` returns True for unset values (inverted name)",
-    "severity": "Low",
+    "summary": "test_add_form_uuid_pk only asserts is_valid() is False with INITIAL_FORMS=1 and no id",
+    "severity": "minor",
     "verdict": "NOISE",
-    "reason": "True per diff, but naming only."
+    "reason": "Accurate per tests/inline_formsets/tests.py in diff, but a test-quality nit."
    },
    {
-    "summary": "Inline formset test only asserts is_valid() is False",
-    "severity": "Low",
+    "summary": "Composite test's assertIsNotNone(post.id) should be isinstance(..., DatabaseDefault)",
+    "severity": "minor",
     "verdict": "NOISE",
-    "reason": "Test-strength nit; the test does fail at the base (crash), so it has some value."
+    "reason": "Test wording nit."
+   },
+   {
+    "summary": "Missing docs/releases note",
+    "severity": "minor",
+    "verdict": "NOISE",
+    "reason": "Docs; conditional on being a regression, not a code defect."
    }
   ],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "PARTIAL",
-    "evidence": "\"`_save_table` then calls `meta.pk.get_pk_value_on_save(self)`\" (with a false NULL consequence), plus the Medium finding \"Other `_is_pk_set()` callers change behavior ... treat an instance whose pk is a `DatabaseDefault` as having no pk\" with accurate call sites but no concrete changed behavior."
+    "evidence": "\"With this PR, _is_pk_set() returns False... if not self._is_pk_set(meta) then runs pk_val = meta.pk.get_pk_value_on_save(self) and setattr(...). The DatabaseDefault is replaced\"; \"The 12+ other _is_pk_set callers ... changing the shared predicate affects all of them.\" Right mechanism, but the claimed outcome (None/NULL insert, existing tests failing) is wrong: get_pk_value_on_save returns a DatabaseDefault for db_default-only fields because NOT_PROVIDED is truthy. The real case (Python default + db_default) is never named."
    }
   ],
   "other": [
    {
-    "summary": "save() on a db_default-only pk inserts NULL and breaks the PrimaryKeyWithDbDefault save tests",
+    "summary": "save() of a db_default pk overwrites it with None and INSERTs NULL; existing basic tests will fail",
     "severity": "High",
     "verdict": "FALSE_POSITIVE",
-    "reason": "Field.get_pk_value_on_save returns get_default() (a DatabaseDefault) because NOT_PROVIDED is truthy; a SQLite run at the head inserted the db default normally."
+    "reason": "Field.get_pk_value_on_save does `if self.default:` where default is the truthy NOT_PROVIDED class, so get_default() returns DatabaseDefault for db_default-only fields; save proceeds normally."
    },
    {
-    "summary": "New inline test uses the wrong prefix and passes without the fix",
+    "summary": "Composite pk with DatabaseDefault member in bulk_create gets member overwritten with None/value",
     "severity": "Low",
     "verdict": "FALSE_POSITIVE",
-    "reason": "The prefix mismatch is real, but at the base, constructing the formset with that data raises ValidationError '<DatabaseDefault> is not a valid UUID', so the test would fail without the fix."
-   },
+    "reason": "CompositePrimaryKey.get_pk_value_on_save only replaces members that are None, so DatabaseDefault members are kept; query.py is not changed by the PR; objects only move to objs_without_pk, which works."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r1": {
+  "known": [
    {
-    "summary": "Inner helper `_is_set` name is inverted",
-    "severity": "none",
-    "verdict": "NOISE",
-    "reason": "Naming only."
+    "id": "K1",
+    "verdict": "PARTIAL",
+    "evidence": "Names concrete caller changes from the new meaning of _is_pk_set (hash() TypeError, delete() ValueError, second save() INSERTs instead of UPDATE), but explicitly says in _save_table \"get_pk_value_on_save is a no-op for db_default\", missing that a Python default replaces the db default."
+   }
+  ],
+  "other": [
+   {
+    "summary": "On non-RETURNING backends the saved instance keeps a DatabaseDefault pk, so _is_pk_set() is now False: hash/delete raise, a re-save INSERTs again",
+    "severity": "Low (unverified)",
+    "verdict": "VALID",
+    "reason": "SQLInsertCompiler.execute_sql returns [] when there is no RETURNING and no AutoField, so the pk stays DatabaseDefault; __hash__ (base.py:649), delete and _save_table all now see 'unset'. The stated mechanism (the elif dropping the field) is wrong, since DatabaseDefault has resolve_expression, but the outcome holds."
    }
   ],
   "states_limits": true,
@@ -66,21 +85,21 @@
    {
     "id": "K1",
     "verdict": "MISSED",
-    "evidence": "\"found no correctness bugs\"; \"the logic is correct\"."
+    "evidence": "\"found no correctness bugs\"; \"the logic is correct.\""
    }
   ],
   "other": [
    {
-    "summary": "Nested helper `_is_set` name is inverted",
-    "severity": "minor",
+    "summary": "Nested helper _is_set is named backwards; could be module-level",
+    "severity": "simplification",
     "verdict": "NOISE",
-    "reason": "True per diff; style only."
+    "reason": "Confirmed at base.py:713; style only."
    },
    {
-    "summary": "test_add_form_uuid_pk is weak/misnamed (INITIAL_FORMS=1, only asserts invalid)",
-    "severity": "minor",
+    "summary": "test_add_form_uuid_pk is misnamed and only asserts invalidity",
+    "severity": "test-coverage",
     "verdict": "NOISE",
-    "reason": "Test nit; line 127 is the assert in the added test."
+    "reason": "Accurate per the diff, but a test nit."
    }
   ],
   "states_limits": true,

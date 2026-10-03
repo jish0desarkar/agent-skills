@@ -1,44 +1,101 @@
 {
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"A string literal containing `..` triggers the double-dot warning ... `{{ \"a..b\" }}` ... FilterExpression.__init__ resolves a leading constant with Variable(constant).resolve({}) and stores the resulting str in filter_expression.var ... the RemovedInDjango70Warning is a false positive ... Once the deprecation ends ... those templates would fail to compile.\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Deprecation check only covers {{ }} variable nodes; {% if a..b %}, {% for %}, {% with %} still resolve '..' silently",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "The warning sits only in the TokenType.VAR branch of Parser.parse (base.py:558). Block tags call compile_filter themselves and never reach it, while deprecation.txt says double-dot lookup support 'is removed' without limiting it to {{ }}."
+   },
+   {
+    "summary": "self.origin may be None for a directly constructed Parser, so the f-string raises AttributeError instead of warning",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "Parser.__init__ defaults origin=None (base.py:502/524) and line 562 reads self.origin.name before warnings.warn is called. Only direct Parser users (as in tests/template_tests/test_parser.py) can hit it; Template always sets an Origin."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "\"False positives on string literals ... For a quoted constant that is the resolved literal string, so any literal containing `..` triggers it. `{{ \"Wait...\" }}`, `{{ \"a..b\" }}` and `{{ _(\"Loading...\") }}` would all emit the deprecation warning ... When the deprecation ends, templates with ellipsis literals would stop compiling. Fix: only check when filter_expression.is_var is true\""
+   }
+  ],
+  "other": [
+   {
+    "summary": "Check covers only {{ }} output nodes; tags ({% if/for/with %}) and filter arguments (x|default:a..b) still resolve '..' silently",
+    "severity": "design",
+    "verdict": "VALID",
+    "reason": "str(filter_expression.var) excludes filter args, and block tags never pass through the VAR branch at base.py:558. The deprecation note claims support is removed outright."
+   },
+   {
+    "summary": "self.origin.name raises AttributeError when Parser is built directly with origin=None",
+    "severity": "minor",
+    "verdict": "VALID",
+    "reason": "Parser origin defaults to None (base.py:502) and the f-string at line 562 is evaluated unconditionally. This is reachable only through direct Parser use."
+   },
+   {
+    "summary": "Warning message embeds template name and line, so the default filter won't deduplicate repeats",
+    "severity": "nit",
+    "verdict": "NOISE",
+    "reason": "A remark about warning-message behaviour, not a defect; B itself says 'That is fine'."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
  "baseline": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"The check `\"..\" in str(filter_expression.var)` also matches quoted literals. For a constant like `{{ \"a..b\" }}`, `FilterExpression` stores the already-resolved string as `var`, so the deprecation warning fires even though no lookup happens\"; fix: warn only when `var` is a `Variable` whose `lookups` contains an empty string."
+    "evidence": "\"The check `\\\"..\\\" in str(filter_expression.var)` also matches quoted literals. For a constant like `{{ \\\"a..b\\\" }}`, FilterExpression stores the already-resolved string as var, so the deprecation warning fires even though no lookup happens. When the deprecation ends ... those valid templates would fail with a TemplateSyntaxError.\""
    }
   ],
   "other": [
    {
-    "summary": "Tests only cover `{{ doubledot..lookup }}`: no negative test for literals, and double-dot in tags ({% if a..b %}, {% for %}) is neither covered nor documented in the release note",
+    "summary": "No negative tests for {{ \"a..b\" }} or {{ x|default:\"..\" }}",
     "severity": "test-coverage",
     "verdict": "NOISE",
-    "reason": "True that the warning is only in the VAR-token branch (base.py:558) and tags go through compile_filter without it. But the missing negative test restates K1, and tag scope is a deliberate limit that won't break anything when the deprecation ends (the error is also raised only in the VAR branch). This is a test/docs nit."
+    "reason": "The new tests in test_basic.py cover only {{ doubledot..lookup }}. This is a test-gap remark; the underlying defect is already counted as K1."
+   },
+   {
+    "summary": "Warning fires only for {{ }} variables, not tags such as {% if a..b %} / {% for x in a..b %}, and the release note doesn't say so",
+    "severity": "test-coverage",
+    "verdict": "VALID",
+    "reason": "Confirmed: the check is only in the TokenType.VAR branch (base.py:558), and block-tag arguments go through compile_filter elsewhere."
    }
   ],
   "states_limits": true,
   "claims_unrun_execution": false
  },
- "skill": {
+ "skill-v2-r2": {
   "known": [
    {
     "id": "K1",
     "verdict": "CAUGHT",
-    "evidence": "\"The deprecation warning also fires for string literals and translated strings that contain `..`\"; \"`FilterExpression.__init__` resolves quoted constants at parse time (`Variable(constant).resolve({})`), so `filter_expression.var` is the plain string\"; mentions the -W error impact and the TemplateSyntaxError once the deprecation ends; fix: `is_var` plus `\"\" in var.lookups`. (Minor misstatement: claims `_(\"...\")` stays a Variable, but it is resolved to a lazy translated string; the conclusion still holds.)"
+    "evidence": "\"Quoted string literals containing `..` trigger the deprecation warning ... `{{ 'a..b' }}` or `{{ _(\\\"Loading...\\\") }}` ... FilterExpression.__init__ resolves a quoted constant straight to a plain str (base.py:770-775) ... The literal path has no is_var guard ... in Django 7.0 the commented-out raise would make those templates fail to compile.\""
    }
   ],
-  "other": [],
-  "states_limits": true,
-  "claims_unrun_execution": false
- },
- "skill-maps": {
-  "known": [
+  "other": [
    {
-    "id": "K1",
-    "verdict": "CAUGHT",
-    "evidence": "\"When the expression starts with a quoted constant, `FilterExpression.__init__` stores the resolved string in `.var`, not a `Variable` (`base.py:770-773`, `self.var = var_obj` at line 799). So `{{ \"Loading...\" }}`, `{{ \"wait..\"|upper }}` and `{{ _(\"Please wait...\") }}` all contain `..` and match\"; mentions breakage once the deprecation ends; fix: check `filter_expression.is_var` or an empty entry in `.lookups`."
+    "summary": "self.origin can be None (direct Parser construction), so the warning path raises AttributeError",
+    "severity": "Low",
+    "verdict": "VALID",
+    "reason": "Confirmed: Parser.__init__ has origin=None at base.py:502, and line 562 dereferences self.origin.name. Template always sets an Origin, so only direct Parser users are affected."
    }
   ],
-  "other": [],
   "states_limits": true,
   "claims_unrun_execution": false
  }

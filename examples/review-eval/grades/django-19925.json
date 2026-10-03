@@ -1,0 +1,107 @@
+{
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "[Low] Changing only a Python on_delete now alters the column and drops/re-creates its FK ... `_field_should_be_altered` therefore sees CASCADE \u2192 PROTECT (or any Python-to-Python change) as a schema change ... a no-op migration that used to emit no SQL now rebuilds the constraint"
+   }
+  ],
+  "other": [
+   {
+    "summary": "A DB_SET_DEFAULT FK skips the E323 mixed-variant chain check because the check is in the final elif of _check_on_delete",
+    "severity": "Medium",
+    "verdict": "VALID",
+    "reason": "related.py:1084 `elif on_delete == DB_SET_DEFAULT` comes before the final elif at 1113 that holds the E323 check, so DB_SET_DEFAULT never reaches it while DB_SET_NULL and DB_CASCADE do"
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "Python-level changes now alter the schema. Dropping \"on_delete\" from the non-database attributes ... a change like CASCADE to PROTECT now counts as a schema alteration. That drops and recreates the FK constraint, or remakes the table on SQLite, for a change that has no database effect."
+   }
+  ],
+  "other": [
+   {
+    "summary": "DB_SET_DEFAULT (and SET_NULL/SET_DEFAULT fields with an error) skip the E323 mixed-chain check because of the elif chain",
+    "severity": "none",
+    "verdict": "VALID",
+    "reason": "Confirmed at related.py:1059-1113: the E323 check is the last elif, after the DB_SET_DEFAULT branch and the E320/E321 error branches"
+   },
+   {
+    "summary": "_create_on_delete_sql's try/except AttributeError could swallow real errors",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "The code is quoted correctly, but the base fk_on_delete_sql raises NotImplementedError, not AttributeError; a hidden bug is speculation and the suggested change is a robustness preference"
+   },
+   {
+    "summary": "NoFastDeleteCollector and NestedObjects.can_fast_delete removed without a release note",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Both are removed in the diff, but they were undocumented internals; this is a docs/compatibility nit the review itself calls probably fine"
+   },
+   {
+    "summary": "Oracle template splits %(on_delete_db) and s across two literals",
+    "severity": "style",
+    "verdict": "NOISE",
+    "reason": "The literals are concatenated at import, so it works; style only"
+   },
+   {
+    "summary": "Docs should mention that DB_SET_NULL/DB_SET_DEFAULT are skipped under forced collection and that signals don't run",
+    "severity": "none",
+    "verdict": "NOISE",
+    "reason": "Docs suggestion; the skip is deliberate (forced_collector is None for these)"
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Lists under 'Everything else I checked looked fine': 'the alter-field path, which now recreates the foreign key when only on_delete changes because on_delete was removed from the ignored attributes' - it noticed the behaviour but judged it fine"
+   }
+  ],
+  "other": [
+   {
+    "summary": "DatabaseOnDelete.__call__ = DO_NOTHING binds self, so calling a DB_* value directly raises TypeError (5 args for 4)",
+    "severity": "PLAUSIBLE",
+    "verdict": "VALID",
+    "reason": "deletion.py:89 assigns a plain function as a class attribute, so it becomes a bound method; latent because Collector.collect skips SKIP_COLLECTION values, but any direct call (for example from a custom collector) fails"
+   },
+   {
+    "summary": "E323 mixed-chain check skipped for DB_SET_DEFAULT and for fields that fail E320/E321",
+    "severity": "PLAUSIBLE",
+    "verdict": "VALID",
+    "reason": "Confirmed in the elif chain at related.py:1059-1113"
+   },
+   {
+    "summary": "Broad except AttributeError in _create_on_delete_sql could hide backend bugs",
+    "severity": "PLAUSIBLE",
+    "verdict": "NOISE",
+    "reason": "Code is accurate, but a hidden AttributeError is hypothetical; the base implementation raises NotImplementedError"
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "CAUGHT",
+    "evidence": "[Medium] Changing a Python-level on_delete now drops and recreates the FK constraint ... the PR removes \"on_delete\" from Field.non_db_attrs ... _alter_field then drops and re-adds the FK constraint, and SQLite remakes the whole table"
+   }
+  ],
+  "other": [],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}

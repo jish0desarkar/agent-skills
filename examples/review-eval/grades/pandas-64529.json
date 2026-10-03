@@ -1,0 +1,95 @@
+{
+ "skill-v2-r1": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "Noticed the shared data but dismissed it: \"Aliasing: this is safe... pyarrow arrays are immutable... The two arrays share buffers, but nothing can change them.\" Never considers zero-copy boxing over a numpy buffer the caller still owns, or the Copy-on-Write breakage."
+   }
+  ],
+  "other": [
+   {
+    "summary": "Optional: add a test that arr[:] = other_arr leaves other_arr unchanged after a later arr[0] = ...",
+    "severity": "optional",
+    "verdict": "NOISE",
+    "reason": "A test suggestion, and the test it proposes would pass even with the K1 bug because it checks the wrong direction of sharing."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "skill-v2-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "\"This is safe because __setitem__ rebinds _pa_array and never mutates buffers, and pyarrow arrays are immutable.\" Ignores numpy-backed zero-copy inputs and the Copy-on-Write breakage."
+   }
+  ],
+  "other": [],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ },
+ "baseline-r2": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "\"Pyarrow arrays are immutable, so sharing the buffer can't cause aliasing bugs.\" Wrong: the shared buffer can be a numpy array the caller can still mutate."
+   }
+  ],
+  "other": [
+   {
+    "summary": "No test added for the fast path",
+    "severity": "request",
+    "verdict": "NOISE",
+    "reason": "Test nit. The diff does add no test, but that is not a defect."
+   },
+   {
+    "summary": "No benchmark or whatsnew entry for a PERF PR",
+    "severity": "request",
+    "verdict": "NOISE",
+    "reason": "Process and docs nit."
+   },
+   {
+    "summary": "Add a comment explaining why the shortcut is safe",
+    "severity": "optional",
+    "verdict": "NOISE",
+    "reason": "Style nit, and the safety reasoning it would document is wrong (K1)."
+   }
+  ],
+  "states_limits": false,
+  "claims_unrun_execution": false
+ },
+ "baseline": {
+  "known": [
+   {
+    "id": "K1",
+    "verdict": "MISSED",
+    "evidence": "\"two arrays can now share the same underlying pyarrow array. That's harmless because pyarrow arrays are immutable...\" Misses numpy-memory sharing and the Copy-on-Write breakage."
+   }
+  ],
+  "other": [
+   {
+    "summary": "No test added (values, aliasing, length mismatch, multi-chunk)",
+    "severity": "non-blocking",
+    "verdict": "NOISE",
+    "reason": "Test suggestion. Its proposed aliasing test would not detect K1."
+   },
+   {
+    "summary": "No perf evidence (asv or timing)",
+    "severity": "non-blocking",
+    "verdict": "NOISE",
+    "reason": "Process nit."
+   },
+   {
+    "summary": "Check whether a whatsnew entry is expected",
+    "severity": "non-blocking",
+    "verdict": "NOISE",
+    "reason": "Docs nit."
+   }
+  ],
+  "states_limits": true,
+  "claims_unrun_execution": false
+ }
+}
